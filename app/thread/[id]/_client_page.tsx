@@ -21,10 +21,10 @@ interface Thread {
   category_id: string;
   categories: {
     name: string;
-  };
+  }[] | null;
   users: {
     username: string;
-  };
+  }[] | null;
 }
 
 interface Post {
@@ -34,7 +34,7 @@ interface Post {
   user_id: string;
   users: {
     username: string;
-  };
+  }[] | null;
   likes: {
     id: string;
     user_id: string;
@@ -74,8 +74,8 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           created_at,
           user_id,
           category_id,
-          categories!threads_category_id_fkey (name),
-          users!threads_user_id_fkey (username)
+          categories (name),
+          users (username)
         `)
         .eq('id', threadId)
         .single();
@@ -95,8 +95,8 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           content,
           created_at,
           user_id,
-          users!posts_user_id_fkey (username),
-          likes!likes_post_id_fkey (id, user_id)
+          users (username),
+          likes (id, user_id)
         `)
         .eq('thread_id', threadId)
         .order('created_at', { ascending: true });
@@ -232,7 +232,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           <Link href={`/category/${thread.category_id}`}>
             <Button variant="outline" size="sm" className="border-zinc-700 text-gray-300 hover:bg-zinc-800">
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to {thread.categories?.name}
+              Back to {thread.categories?.[0]?.name}
             </Button>
           </Link>
         </div>
@@ -245,7 +245,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           <div className="flex items-center space-x-4 text-sm text-gray-400">
             <div className="flex items-center space-x-1">
               <User className="h-4 w-4" />
-              <span>Started by {thread.users?.username || 'Unknown User'}</span>
+              <span>Started by {thread.users?.[0]?.username || 'Unknown User'}</span>
             </div>
             <div className="flex items-center space-x-1">
               <Clock className="h-4 w-4" />
@@ -270,7 +270,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                     </div>
                     <div>
                       <div className="font-semibold text-white">
-                        {post.users?.username || 'Unknown User'}
+                        {post.users?.[0]?.username || 'Unknown User'}
                       </div>
                       <div className="text-sm text-gray-400">
                         {index === 0 ? 'Original Post' : `Post #${index + 1}`} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}

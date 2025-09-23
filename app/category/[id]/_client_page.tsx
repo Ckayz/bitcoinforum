@@ -27,7 +27,7 @@ interface Thread {
   user_id: string;
   users: {
     username: string;
-  };
+  }[] | null;
   posts: {
     id: string;
   }[];
@@ -81,8 +81,8 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
           title,
           created_at,
           user_id,
-          users!threads_user_id_fkey (username),
-          posts!posts_thread_id_fkey (id)
+          users (username),
+          posts (id)
         `)
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
@@ -301,7 +301,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
                         <div className="flex items-center space-x-4 text-sm text-gray-400">
                           <div className="flex items-center space-x-1">
                             <User className="h-4 w-4" />
-                            <span>{thread.users?.username || 'Unknown User'}</span>
+                            <span>{thread.users?.[0]?.username || 'Unknown User'}</span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <MessageSquare className="h-4 w-4" />
