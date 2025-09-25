@@ -33,17 +33,19 @@ interface Post {
   content: string;
   created_at: string;
   user_id: string;
-  thread_id: string;
   image_url?: string;
   video_url?: string;
-  users: { username: string; role?: string } | null;
-  threads: {
-    id: string;
-    title: string;
-    category_id: string;
-  } | null;
+  users: { username: string; role?: string }[] | null;
   likes: { id: string }[];
-  comments: Comment[];
+  comments: {
+    id: string;
+    content: string;
+    created_at: string;
+    user_id: string;
+    image_url?: string;
+    users: { username: string; role?: string }[] | null;
+    comment_likes: { id: string }[];
+  }[];
 }
 
 interface Thread {
