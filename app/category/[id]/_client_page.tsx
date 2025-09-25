@@ -51,6 +51,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
   const [newThreadContent, setNewThreadContent] = useState('');
   const [newThreadImage, setNewThreadImage] = useState('');
   const [newThreadVideo, setNewThreadVideo] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -134,6 +135,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
             category_id: category.id,
             user_id: user.id,
             title: newThreadTitle,
+            is_anonymous: isAnonymous,
           },
         ])
         .select()
@@ -151,6 +153,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
             content: newThreadContent,
             image_url: newThreadImage || null,
             video_url: newThreadVideo || null,
+            is_anonymous: isAnonymous,
           },
         ]);
 
@@ -304,6 +307,18 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
                     rows={5}
                     className="bg-zinc-800 border-zinc-700 text-white focus:border-orange-500"
                   />
+                </div>
+
+                {/* Anonymous Option */}
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="anonymous"
+                    checked={isAnonymous}
+                    onCheckedChange={setIsAnonymous}
+                  />
+                  <label htmlFor="anonymous" className="text-sm text-gray-300">
+                    Post anonymously
+                  </label>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Bitcoin } from 'lucide-react';
@@ -18,12 +18,29 @@ export function Navbar() {
   const [helpModal, setHelpModal] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { user, signOut, loading } = useAuth();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
       fetchUserAvatar();
     }
   }, [user]);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isOpen]);
 
   const fetchUserAvatar = async () => {
     if (!user) return;
@@ -96,7 +113,7 @@ export function Navbar() {
                   <div className="h-8 w-20 bg-zinc-800 rounded"></div>
                 </div>
               ) : user ? (
-                <div className="relative">
+                <div className="relative" ref={dropdownRef}>
                   <button
                     onClick={() => setIsOpen(!isOpen)}
                     className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
@@ -114,7 +131,7 @@ export function Navbar() {
                   </button>
 
                   {isOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-zinc-800 rounded-md shadow-lg py-1 z-50 border border-zinc-700">
+                    <div className="absolute right-0 mt-2 w-48 bg-zinc-800 rounded-md shadow-lg py-1 z-[9999] border border-zinc-700">
                       <button
                         onClick={() => openModal('profile')}
                         className="block w-full text-left px-4 py-2 text-sm text-gray-300 hover:bg-zinc-700 hover:text-white"
@@ -156,12 +173,32 @@ export function Navbar() {
 
             {/* Mobile menu button */}
             <div className="md:hidden flex items-center">
-              <button
-                onClick={() => setIsOpen(!isOpen)}
-                className="text-gray-300 hover:text-white focus:outline-none"
-              >
-                {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-              </button>
+              {user ? (
+                <div className="flex items-center space-x-2">
+                  <Avatar className="h-8 w-8">
+                    {avatarUrl ? (
+                      <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <AvatarFallback className="bg-orange-500 text-white">
+                        {user.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <button
+                    onClick={() => setIsOpen(!isOpen)}
+                    className="text-gray-300 hover:text-white focus:outline-none"
+                  >
+                    {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsOpen(!isOpen)}
+                  className="text-gray-300 hover:text-white focus:outline-none"
+                >
+                  {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+                </button>
+              )}
             </div>
           </div>
         </div>

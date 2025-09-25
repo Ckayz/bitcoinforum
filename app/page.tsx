@@ -6,12 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Bitcoin, MessageSquare, Clock, Heart, Share2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { Navbar } from '@/components/Navbar';
 import { UserBadge } from '@/components/UserBadge';
 import { ShareModal } from '@/components/modals/ShareModal';
 import { useAuth } from '@/hooks/useAuth';
-import { formatDistanceToNow } from 'date-fns';
 
 interface Category {
   id: string;
@@ -35,7 +35,8 @@ interface Post {
   user_id: string;
   image_url?: string;
   video_url?: string;
-  users: { username: string; role?: string }[] | null;
+  is_anonymous?: boolean;
+  users: { username: string; role?: string } | null;
   likes: { id: string }[];
   comments: {
     id: string;
@@ -43,7 +44,8 @@ interface Post {
     created_at: string;
     user_id: string;
     image_url?: string;
-    users: { username: string; role?: string }[] | null;
+    is_anonymous?: boolean;
+    users: { username: string; role?: string } | null;
     comment_likes: { id: string }[];
   }[];
 }
@@ -54,7 +56,7 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  users: { username: string; role?: string }[] | null;
+  users: { username: string; role?: string } | null;
   posts: Post[];
 }
 
@@ -107,14 +109,14 @@ export default function Home() {
         .from('threads')
         .select(`
           id, title, created_at, user_id, category_id,
-          users (username, role),
+          users!threads_user_id_fkey (username, role),
           posts (
-            id, content, created_at, user_id, image_url, video_url,
-            users (username, role),
+            id, content, created_at, user_id, image_url, video_url, is_anonymous,
+            users!posts_user_id_fkey (username, role),
             likes (id),
             comments (
-              id, content, created_at, user_id, image_url,
-              users (username, role),
+              id, content, created_at, user_id, image_url, is_anonymous,
+              users!comments_user_id_fkey (username, role),
               comment_likes (id)
             )
           )
@@ -285,8 +287,8 @@ export default function Home() {
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
                         <UserBadge 
-                          username={thread.users?.[0]?.username || 'Unknown'} 
-                          role={thread.users?.[0]?.role}
+                          username={thread.users?.username || 'Unknown'} 
+                          role={thread.users?.role}
                           className="text-sm"
                         />
                         <div className="flex items-center space-x-1">
@@ -307,6 +309,19 @@ export default function Home() {
                   {thread.posts && thread.posts.length > 0 && (
                     <div className="mb-4">
                       <div className="bg-zinc-800 rounded-lg p-4">
+                        {/* Post Author */}
+                        <div className="flex items-center space-x-2 mb-3">
+                          <UserBadge 
+                            username={thread.posts[0].users?.username || 'Unknown'} 
+                            role={thread.posts[0].users?.role}
+                            isAnonymous={thread.posts[0].is_anonymous}
+                            className="text-sm"
+                          />
+                          <span className="text-gray-500 text-xs">
+                            {formatDistanceToNow(new Date(thread.posts[0].created_at), { addSuffix: true })}
+                          </span>
+                        </div>
+                        
                         <p className="text-gray-300 mb-3 line-clamp-3">{thread.posts[0].content}</p>
                         
                         {/* Media Display */}
@@ -366,6 +381,7 @@ export default function Home() {
                                       <UserBadge 
                                         username={comment.users?.username || 'Unknown'} 
                                         role={comment.users?.role}
+                                        isAnonymous={comment.is_anonymous}
                                         className="text-xs"
                                       />
                                       <span className="text-xs text-gray-400">

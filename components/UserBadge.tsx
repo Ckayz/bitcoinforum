@@ -4,9 +4,12 @@ interface UserBadgeProps {
   role?: string;
   username: string;
   className?: string;
+  isAnonymous?: boolean;
 }
 
-export function UserBadge({ role = 'user', username, className = '' }: UserBadgeProps) {
+export function UserBadge({ role = 'user', username, className = '', isAnonymous = false }: UserBadgeProps) {
+  const displayName = isAnonymous ? 'Anonymous' : username;
+  const displayRole = isAnonymous ? 'user' : role;
   const getRoleIcon = () => {
     switch (role) {
       case 'admin':
@@ -21,7 +24,7 @@ export function UserBadge({ role = 'user', username, className = '' }: UserBadge
   };
 
   const getRoleColor = () => {
-    switch (role) {
+    switch (displayRole) {
       case 'admin':
         return 'text-yellow-500';
       case 'moderator':
@@ -36,18 +39,18 @@ export function UserBadge({ role = 'user', username, className = '' }: UserBadge
   return (
     <div className={`flex items-center space-x-1 ${className}`}>
       {getRoleIcon()}
-      <span className={getRoleColor()}>{username}</span>
-      {role !== 'user' && (
+      <span className={getRoleColor()}>{displayName}</span>
+      {displayRole !== 'user' && !isAnonymous && (
         <span className={`text-xs px-1 py-0.5 rounded ${
-          role === 'admin' 
+          displayRole === 'admin' 
             ? 'bg-yellow-500/20 text-yellow-400'
-            : role === 'moderator'
+            : displayRole === 'moderator'
             ? 'bg-blue-500/20 text-blue-400' 
-            : role === 'verified'
+            : displayRole === 'verified'
             ? 'bg-green-500/20 text-green-400'
             : ''
         }`}>
-          {role}
+          {displayRole}
         </span>
       )}
     </div>

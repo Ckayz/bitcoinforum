@@ -118,6 +118,8 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       if (error) throw error;
       
       alert('Profile updated successfully!');
+      // Trigger a page refresh to update all components
+      window.location.reload();
     } catch (error) {
       console.error('Error saving profile:', error);
       alert('Error saving profile: ' + error.message);
