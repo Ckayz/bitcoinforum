@@ -102,14 +102,14 @@ export default function Home() {
         .from('threads')
         .select(`
           id, title, created_at, user_id, category_id,
-          users!threads_user_id_fkey (username, role),
+          users(username, role),
           posts (
             id, content, created_at, user_id, image_url, video_url, is_anonymous,
-            users!posts_user_id_fkey (username, role),
+            users(username, role),
             likes (id),
             comments (
               id, content, created_at, user_id, image_url, is_anonymous,
-              users!comments_user_id_fkey (username, role),
+              users(username, role),
               comment_likes (id)
             )
           )
