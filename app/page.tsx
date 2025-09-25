@@ -26,7 +26,7 @@ interface Comment {
   user_id: string;
   image_url?: string;
   is_anonymous?: boolean;
-  users: { username: string; role?: string }[];
+  users: { username: string; role?: string } | { username: string; role?: string }[] | null;
   comment_likes: { id: string }[];
 }
 
@@ -38,7 +38,7 @@ interface Post {
   image_url?: string;
   video_url?: string;
   is_anonymous?: boolean;
-  users: { username: string; role?: string }[];
+  users: { username: string; role?: string } | { username: string; role?: string }[] | null;
   likes: { id: string }[];
   comments: Comment[];
 }
@@ -49,7 +49,7 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  users: { username: string; role?: string }[];
+  users: { username: string; role?: string } | { username: string; role?: string }[] | null;
   posts: Post[];
 }
 
@@ -62,6 +62,24 @@ export default function Home() {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [newComment, setNewComment] = useState<{[key: string]: string}>({});
   const [commenting, setCommenting] = useState<{[key: string]: boolean}>({});
+
+  // Helper function to safely get username
+  const getUsername = (users: any) => {
+    if (!users) return 'Unknown';
+    if (Array.isArray(users)) {
+      return users[0]?.username || 'Unknown';
+    }
+    return users.username || 'Unknown';
+  };
+
+  // Helper function to safely get user role
+  const getUserRole = (users: any) => {
+    if (!users) return undefined;
+    if (Array.isArray(users)) {
+      return users[0]?.role;
+    }
+    return users.role;
+  };
   const [shareModal, setShareModal] = useState<{isOpen: boolean; url: string; title: string}>({
     isOpen: false,
     url: '',
@@ -102,14 +120,14 @@ export default function Home() {
         .from('threads')
         .select(`
           id, title, created_at, user_id, category_id,
-          users(username, role),
+          users!threads_user_id_fkey(username, role),
           posts (
             id, content, created_at, user_id, image_url, video_url, is_anonymous,
-            users(username, role),
+            users!posts_user_id_fkey(username, role),
             likes (id),
             comments (
               id, content, created_at, user_id, image_url, is_anonymous,
-              users(username, role),
+              users!comments_user_id_fkey(username, role),
               comment_likes (id)
             )
           )
@@ -120,7 +138,13 @@ export default function Home() {
         query = query.eq('category_id', categoryId);
       }
 
-      const { data } = await query;
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error('Query error:', error);
+      }
+      
+      console.log('Fetched threads with users:', data?.[0]); // Debug log
       setThreads(data || []);
     } catch (error) {
       console.error('Error fetching threads:', error);
@@ -280,8 +304,8 @@ export default function Home() {
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
                         <UserBadge 
-                          username={thread.users?.[0]?.username || 'Unknown'} 
-                          role={thread.users?.[0]?.role}
+                          username={getUsername(thread.users)} 
+                          role={getUserRole(thread.users)}
                           className="text-sm"
                         />
                         <div className="flex items-center space-x-1">
@@ -305,8 +329,8 @@ export default function Home() {
                         {/* Post Author */}
                         <div className="flex items-center space-x-2 mb-3">
                           <UserBadge 
-                            username={thread.posts[0].users?.[0]?.username || 'Unknown'} 
-                            role={thread.posts[0].users?.[0]?.role}
+                            username={getUsername(thread.posts[0].users)} 
+                            role={getUserRole(thread.posts[0].users)}
                             isAnonymous={thread.posts[0].is_anonymous}
                             className="text-sm"
                           />
@@ -372,8 +396,8 @@ export default function Home() {
                                   <div key={comment.id} className="bg-zinc-700 rounded p-3">
                                     <div className="flex items-center space-x-2 mb-2">
                                       <UserBadge 
-                                        username={comment.users?.[0]?.username || 'Unknown'} 
-                                        role={comment.users?.[0]?.role}
+                                        username={getUsername(comment.users)} 
+                                        role={getUserRole(comment.users)}
                                         isAnonymous={comment.is_anonymous}
                                         className="text-xs"
                                       />

@@ -156,7 +156,7 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
       
     } catch (error) {
       console.error('Delete error:', error);
-      alert('Failed to delete post: ' + (error?.message || 'Unknown error'));
+      alert('Failed to delete post: ' + (error as Error)?.message || 'Unknown error');
     }
   };
 
