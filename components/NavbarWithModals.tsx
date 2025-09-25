@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Menu, X, Bitcoin } from 'lucide-react';
@@ -9,39 +9,13 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ProfileModal } from './modals/ProfileModal';
 import { SettingsModal } from './modals/SettingsModal';
 import { HelpModal } from './modals/HelpModal';
-import { supabase } from '@/lib/supabase';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [profileModal, setProfileModal] = useState(false);
   const [settingsModal, setSettingsModal] = useState(false);
   const [helpModal, setHelpModal] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const { user, signOut, loading } = useAuth();
-
-  useEffect(() => {
-    if (user) {
-      fetchUserAvatar();
-    }
-  }, [user]);
-
-  const fetchUserAvatar = async () => {
-    if (!user) return;
-    
-    try {
-      const { data } = await supabase
-        .from('users')
-        .select('avatar_url')
-        .eq('id', user.id)
-        .single();
-      
-      if (data?.avatar_url) {
-        setAvatarUrl(data.avatar_url);
-      }
-    } catch (error) {
-      console.error('Error fetching avatar:', error);
-    }
-  };
 
   const handleSignOut = async () => {
     try {
@@ -102,13 +76,9 @@ export function Navbar() {
                     className="flex items-center space-x-2 text-gray-300 hover:text-white transition-colors"
                   >
                     <Avatar className="h-8 w-8">
-                      {avatarUrl ? (
-                        <img src={avatarUrl} alt="Profile" className="w-full h-full object-cover rounded-full" />
-                      ) : (
-                        <AvatarFallback className="bg-orange-500 text-white">
-                          {user.email?.charAt(0).toUpperCase()}
-                        </AvatarFallback>
-                      )}
+                      <AvatarFallback className="bg-orange-500 text-white">
+                        {user.email?.charAt(0).toUpperCase()}
+                      </AvatarFallback>
                     </Avatar>
                     <span className="text-sm">{user.email?.split('@')[0]}</span>
                   </button>

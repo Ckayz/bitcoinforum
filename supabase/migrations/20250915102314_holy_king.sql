@@ -107,6 +107,11 @@ INSERT INTO categories (name, description) VALUES
   ('Projects & Jobs', 'Bitcoin projects, job opportunities, and collaboration requests'),
   ('Forum Feedback', 'Feedback and suggestions for improving the Bitcoin Forum experience');
 
+-- Add News category if it doesn't exist
+INSERT INTO categories (name, description) VALUES
+  ('News', 'Latest Bitcoin news, updates, and important announcements')
+ON CONFLICT (name) DO NOTHING;
+
 -- Verify the setup
 SELECT 'Setup complete! Categories created:' as status;
 SELECT name, description FROM categories ORDER BY created_at;

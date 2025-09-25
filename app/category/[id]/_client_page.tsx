@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Bitcoin, MessageSquare, Clock, User, Plus, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
@@ -25,6 +26,7 @@ interface Thread {
   title: string;
   created_at: string;
   user_id: string;
+  is_anonymous?: boolean;
   users: {
     username: string;
   }[] | null;
@@ -47,6 +49,9 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
   const [showAuthRequired, setShowAuthRequired] = useState(false);
   const [newThreadTitle, setNewThreadTitle] = useState('');
   const [newThreadContent, setNewThreadContent] = useState('');
+  const [newThreadImage, setNewThreadImage] = useState('');
+  const [newThreadVideo, setNewThreadVideo] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
 
   useEffect(() => {
@@ -105,6 +110,13 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
       setShowAuthRequired(true);
       return;
     }
+    
+    // Check if this is News category and user is not verified
+    if (category?.name === 'News' && user.user_metadata?.role !== 'verified') {
+      alert('Only verified users can post in the News section.');
+      return;
+    }
+    
     setShowNewThread(true);
   };
 
@@ -137,6 +149,8 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
             thread_id: threadData.id,
             user_id: user.id,
             content: newThreadContent,
+            image_url: newThreadImage || null,
+            video_url: newThreadVideo || null,
           },
         ]);
 
@@ -148,6 +162,49 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
       console.error('Error creating thread:', error);
     } finally {
       setCreating(false);
+    }
+  };
+
+  const uploadFile = async (file: File) => {
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${Date.now()}.${fileExt}`;
+      const filePath = `uploads/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('media')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data } = supabase.storage
+        .from('media')
+        .getPublicUrl(filePath);
+
+      return data.publicUrl;
+    } catch (error) {
+      console.error('Error uploading file:', error);
+      alert('Error uploading file');
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      const url = await uploadFile(file);
+      if (url) setNewThreadImage(url);
+    }
+  };
+
+  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type.startsWith('video/')) {
+      const url = await uploadFile(file);
+      if (url) setNewThreadVideo(url);
     }
   };
 
@@ -248,6 +305,49 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
                     className="bg-zinc-800 border-zinc-700 text-white focus:border-orange-500"
                   />
                 </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                      id="thread-image-upload"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('thread-image-upload')?.click()}
+                      disabled={uploading}
+                      className="w-full border-zinc-700 text-gray-300 hover:bg-zinc-800"
+                    >
+                      📷 {uploading ? 'Uploading...' : 'Add Image'}
+                    </Button>
+                    {newThreadImage && <p className="text-xs text-green-400">✓ Image selected</p>}
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleVideoUpload}
+                      className="hidden"
+                      id="thread-video-upload"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('thread-video-upload')?.click()}
+                      disabled={uploading}
+                      className="w-full border-zinc-700 text-gray-300 hover:bg-zinc-800"
+                    >
+                      🎥 {uploading ? 'Uploading...' : 'Add Video'}
+                    </Button>
+                    {newThreadVideo && <p className="text-xs text-green-400">✓ Video selected</p>}
+                  </div>
+                </div>
+                
                 <div className="flex space-x-2">
                   <Button
                     type="submit"
@@ -301,7 +401,9 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
                         <div className="flex items-center space-x-4 text-sm text-gray-400">
                           <div className="flex items-center space-x-1">
                             <User className="h-4 w-4" />
-                            <span>{thread.users?.[0]?.username || 'Unknown User'}</span>
+                            <span>
+                              {thread.users?.[0]?.username || 'Unknown User'}
+                            </span>
                           </div>
                           <div className="flex items-center space-x-1">
                             <MessageSquare className="h-4 w-4" />
