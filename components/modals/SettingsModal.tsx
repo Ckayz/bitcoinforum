@@ -89,7 +89,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       alert('Profile picture updated successfully!');
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      alert('Error uploading profile picture: ' + error.message);
+      alert('Error uploading profile picture: ' + (error as Error)?.message || 'Unknown error');
     } finally {
       setUploading(false);
     }
@@ -122,7 +122,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
       window.location.reload();
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile: ' + error.message);
+      alert('Error saving profile: ' + (error as Error)?.message || 'Unknown error');
     } finally {
       setSaving(false);
     }
