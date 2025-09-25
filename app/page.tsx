@@ -56,7 +56,7 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  users: { username: string; role?: string } | null;
+  users: { username: string; role?: string }[] | null;
   posts: Post[];
 }
 
@@ -128,10 +128,7 @@ export default function Home() {
       }
 
       const { data } = await query;
-      
-      // Type assertion to handle Supabase response format
-      const typedData = (data || []) as Thread[];
-      setThreads(typedData);
+      setThreads(data || []);
     } catch (error) {
       console.error('Error fetching threads:', error);
     }
@@ -290,8 +287,8 @@ export default function Home() {
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
                         <UserBadge 
-                          username={thread.users?.username || 'Unknown'} 
-                          role={thread.users?.role}
+                          username={thread.users?.[0]?.username || 'Unknown'} 
+                          role={thread.users?.[0]?.role}
                           className="text-sm"
                         />
                         <div className="flex items-center space-x-1">
