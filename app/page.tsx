@@ -26,7 +26,7 @@ interface Comment {
   user_id: string;
   image_url?: string;
   is_anonymous?: boolean;
-  users: { username: string; role?: string } | null;
+  users: { username: string; role?: string }[];
   comment_likes: { id: string }[];
 }
 
@@ -38,7 +38,7 @@ interface Post {
   image_url?: string;
   video_url?: string;
   is_anonymous?: boolean;
-  users: { username: string; role?: string } | null;
+  users: { username: string; role?: string }[];
   likes: { id: string }[];
   comments: Comment[];
 }
@@ -49,7 +49,7 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  users: { username: string; role?: string } | null;
+  users: { username: string; role?: string }[];
   posts: Post[];
 }
 
@@ -280,8 +280,8 @@ export default function Home() {
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
                         <UserBadge 
-                          username={thread.users?.username || 'Unknown'} 
-                          role={thread.users?.role}
+                          username={thread.users?.[0]?.username || 'Unknown'} 
+                          role={thread.users?.[0]?.role}
                           className="text-sm"
                         />
                         <div className="flex items-center space-x-1">
@@ -305,8 +305,8 @@ export default function Home() {
                         {/* Post Author */}
                         <div className="flex items-center space-x-2 mb-3">
                           <UserBadge 
-                            username={thread.posts[0].users?.username || 'Unknown'} 
-                            role={thread.posts[0].users?.role}
+                            username={thread.posts[0].users?.[0]?.username || 'Unknown'} 
+                            role={thread.posts[0].users?.[0]?.role}
                             isAnonymous={thread.posts[0].is_anonymous}
                             className="text-sm"
                           />
@@ -372,8 +372,8 @@ export default function Home() {
                                   <div key={comment.id} className="bg-zinc-700 rounded p-3">
                                     <div className="flex items-center space-x-2 mb-2">
                                       <UserBadge 
-                                        username={comment.users?.username || 'Unknown'} 
-                                        role={comment.users?.role}
+                                        username={comment.users?.[0]?.username || 'Unknown'} 
+                                        role={comment.users?.[0]?.role}
                                         isAnonymous={comment.is_anonymous}
                                         className="text-xs"
                                       />
