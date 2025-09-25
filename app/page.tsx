@@ -24,6 +24,8 @@ interface Comment {
   content: string;
   created_at: string;
   user_id: string;
+  image_url?: string;
+  is_anonymous?: boolean;
   users: { username: string; role?: string } | null;
   comment_likes: { id: string }[];
 }
@@ -38,16 +40,7 @@ interface Post {
   is_anonymous?: boolean;
   users: { username: string; role?: string } | null;
   likes: { id: string }[];
-  comments: {
-    id: string;
-    content: string;
-    created_at: string;
-    user_id: string;
-    image_url?: string;
-    is_anonymous?: boolean;
-    users: { username: string; role?: string } | null;
-    comment_likes: { id: string }[];
-  }[];
+  comments: Comment[];
 }
 
 interface Thread {
@@ -56,7 +49,7 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  users: { username: string; role?: string }[] | null;
+  users: { username: string; role?: string } | null;
   posts: Post[];
 }
 
@@ -287,8 +280,8 @@ export default function Home() {
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
                         <UserBadge 
-                          username={thread.users?.[0]?.username || 'Unknown'} 
-                          role={thread.users?.[0]?.role}
+                          username={thread.users?.username || 'Unknown'} 
+                          role={thread.users?.role}
                           className="text-sm"
                         />
                         <div className="flex items-center space-x-1">
