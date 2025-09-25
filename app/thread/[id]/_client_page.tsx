@@ -20,9 +20,10 @@ interface Thread {
   created_at: string;
   user_id: string;
   category_id: string;
-  categories: { name: string; }[] | null;
-  users: { username: string; } | null;
+  categories: { name: string }[];   // Supabase returns arrays for relations
+  users: { username: string; role?: string }[]; // <-- fix here (array instead of object)
 }
+
 
 interface Comment {
   id: string;
@@ -30,7 +31,7 @@ interface Comment {
   created_at: string;
   user_id: string;
   image_url?: string;
-  users: { username: string; } | null;
+  users: { username: string }[];  // 👈 make this an array
 }
 
 interface Post {
@@ -40,9 +41,9 @@ interface Post {
   user_id: string;
   image_url?: string;
   video_url?: string;
-  users: { username: string; } | null;
-  likes: { id: string; user_id: string; }[];
-  comments?: Comment[];
+  users: { username: string }[];  // 👈 make this an array
+  likes: { id: string; user_id: string }[];
+  comments?: Comment[];           // 👈 already array, but inside each comment users is array
 }
 
 interface ClientThreadPageProps {
@@ -312,7 +313,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           <div className="flex items-center space-x-4 text-sm text-gray-400">
             <div className="flex items-center space-x-1">
               <User className="h-4 w-4" />
-              <span>Started by {thread.users?.username || 'Unknown User'}</span>
+              <span>Started by {thread.users?.[0]?.username || 'Unknown User'}</span>
             </div>
             <div className="flex items-center space-x-1">
               <Clock className="h-4 w-4" />
@@ -336,7 +337,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                     </div>
                     <div>
                       <div className="font-semibold text-white">
-                        {post.users?.username || 'Unknown User'}
+                        {post.users?.[0]?.username || 'Unknown User'}
                       </div>
                       <div className="text-sm text-gray-400">
                         {index === 0 ? 'Original Post' : `Post #${index + 1}`} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
@@ -408,7 +409,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                                 <User className="h-3 w-3 text-white" />
                               </div>
                               <span className="text-sm font-medium text-white">
-                                {comment.users?.username || 'Unknown User'}
+                                {comment.users?.[0]?.username || 'Unknown User'}
                               </span>
                               <span className="text-xs text-gray-400">
                                 {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
