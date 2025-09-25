@@ -43,7 +43,7 @@ export default function SignUp() {
       await signUp(email, password, username);
       router.push('/');
     } catch (error: any) {
-      setError(error.message || 'Failed to create account');
+      setError((error as Error)?.message || 'Failed to create account');
     } finally {
       setLoading(false);
     }

@@ -29,7 +29,7 @@ export default function Login() {
       await signIn(email, password);
       router.push('/');
     } catch (error: any) {
-      setError(error.message || 'Failed to sign in');
+      setError((error as Error)?.message || 'Failed to sign in');
     } finally {
       setLoading(false);
     }
