@@ -128,7 +128,10 @@ export default function Home() {
       }
 
       const { data } = await query;
-      setThreads(data || []);
+      
+      // Type assertion to handle Supabase response format
+      const typedData = (data || []) as Thread[];
+      setThreads(typedData);
     } catch (error) {
       console.error('Error fetching threads:', error);
     }
