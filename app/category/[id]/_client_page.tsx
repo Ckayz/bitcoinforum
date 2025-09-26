@@ -127,6 +127,25 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
 
     setCreating(true);
     try {
+      // Ensure user profile exists
+      const { data: existingUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('id', user.id)
+        .single();
+      
+      if (!existingUser) {
+        const username = user.email?.split('@')[0] || 'user';
+        await supabase
+          .from('users')
+          .insert([{
+            id: user.id,
+            email: user.email!,
+            username: username,
+            bio: '',
+            avatar_url: '',
+          }]);
+      }
       // Create thread
       const { data: threadData, error: threadError } = await supabase
         .from('threads')

@@ -113,50 +113,34 @@ export function ProfileModal({ isOpen, onClose }: ProfileModalProps) {
     try {
       console.log('Deleting post:', postId);
       
-      // Get comments first, then delete their likes
-      const { data: comments } = await supabase
-        .from('comments')
-        .select('id')
-        .eq('post_id', postId);
-      
-      if (comments && comments.length > 0) {
-        const commentIds = comments.map(c => c.id);
-        await supabase
-          .from('comment_likes')
-          .delete()
-          .in('comment_id', commentIds);
-      }
-      
-      // Delete comments
-      await supabase
-        .from('comments')
-        .delete()
-        .eq('post_id', postId);
-      
-      // Delete post likes
-      await supabase
-        .from('likes')
-        .delete()
-        .eq('post_id', postId);
-      
-      // Delete the post
-      const { error } = await supabase
+      // Get the thread_id for this post
+      const { data: postData, error: fetchError } = await supabase
         .from('posts')
-        .delete()
+        .select('thread_id')
         .eq('id', postId)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      // Delete the thread with user_id check
+      const { error } = await supabase
+        .from('threads')
+        .delete()
+        .eq('id', postData.thread_id)
         .eq('user_id', user?.id);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
 
-      // Update local state and refresh
+      console.log('Thread deleted successfully');
       setUserPosts(posts => posts.filter(post => post.id !== postId));
-      alert('Post deleted successfully!');
-      onClose();
       window.location.reload();
       
     } catch (error) {
       console.error('Delete error:', error);
-      alert('Failed to delete post: ' + (error as Error)?.message || 'Unknown error');
+      alert('Failed to delete post: ' + (error as Error)?.message);
     }
   };
 

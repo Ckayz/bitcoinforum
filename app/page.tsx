@@ -245,7 +245,7 @@ export default function Home() {
             <h1 className="text-3xl font-bold text-white">Bitcoin Forum</h1>
           </div>
           {user && categories.length > 0 && (
-            <Link href={`/category/${categories[0].id}`}>
+            <Link href={`/category/${activeTab === 'all' ? categories[0].id : activeTab}`}>
               <Button className="bg-orange-500 hover:bg-orange-600 text-white">
                 <Plus className="h-4 w-4 mr-2" />
                 New Post
