@@ -72,11 +72,11 @@ export default function ModerationPage() {
       }
 
       const { data } = await query;
-      const transformedData = data?.map(report => ({
+      const transformedData: Report[] = (data || []).map((report: any) => ({
         ...report,
         reporter: report.reporter?.[0] || { username: 'Unknown' },
         reported_user: report.reported_user?.[0] || { username: 'Unknown' }
-      })) || [];
+      }));
       setReports(transformedData);
     } catch (error) {
       console.error('Error fetching reports:', error);
