@@ -5,13 +5,21 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Bitcoin, MessageSquare, Clock, Heart, Share2, Plus, ChevronDown, ChevronUp } from 'lucide-react';
+import { Bitcoin, MessageSquare, Clock, Heart, Share2, Plus, ChevronDown, ChevronUp, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/lib/supabase';
+import { processMentions } from '@/lib/mentions';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Navbar } from '@/components/Navbar';
 import { UserBadge } from '@/components/UserBadge';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { Markdown } from '@/components/Markdown';
+import { ValidatedMarkdown } from '@/components/ValidatedMarkdown';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
+import { MentionInput } from '@/components/MentionInput';
+import { ReactionButton } from '@/components/ReactionButton';
 import { useAuth } from '@/hooks/useAuth';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
 interface Category {
   id: string;
@@ -62,6 +70,8 @@ export default function Home() {
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
   const [newComment, setNewComment] = useState<{[key: string]: string}>({});
   const [commenting, setCommenting] = useState<{[key: string]: boolean}>({});
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMoreThreads, setHasMoreThreads] = useState(true);
 
   // Helper function to safely get username
   const getUsername = (users: any) => {
@@ -86,17 +96,113 @@ export default function Home() {
     title: ''
   });
 
+  // Infinite scroll fetch function
+  const fetchMoreThreads = async (): Promise<boolean> => {
+    const nextPage = currentPage + 1;
+    const hasMore = await fetchThreads(activeTab === 'all' ? undefined : activeTab, nextPage);
+    setCurrentPage(nextPage);
+    return hasMore;
+  };
+
+  const { lastElementRef, isFetching } = useInfiniteScroll(fetchMoreThreads);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   useEffect(() => {
+    // Auto-refresh when page becomes visible (user returns from thread)
+    const handleVisibilityChange = () => {
+      if (!document.hidden && categories.length > 0) {
+        // Reset and refetch threads when page becomes visible
+        setCurrentPage(0);
+        setThreads([]);
+        if (activeTab === 'all') {
+          fetchThreads();
+        } else {
+          fetchThreads(activeTab);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [categories, activeTab]);
+
+  useEffect(() => {
+    // Reset pagination when tab changes
+    setCurrentPage(0);
+    setHasMoreThreads(true);
+    
     if (categories.length > 0 && activeTab === 'all') {
       fetchThreads();
     } else if (activeTab !== 'all') {
       fetchThreads(activeTab);
     }
   }, [activeTab, categories]);
+
+  // Real-time subscriptions for threads
+  useRealtime({
+    table: 'threads',
+    onInsert: (payload) => {
+      const newThread = payload.new;
+      // Add new thread to the top of the list
+      setThreads(prev => [newThread, ...prev]);
+    },
+    onUpdate: (payload) => {
+      const updatedThread = payload.new;
+      setThreads(prev => prev.map(thread => 
+        thread.id === updatedThread.id 
+          ? { ...thread, ...updatedThread }
+          : thread
+      ));
+    },
+    onDelete: (payload) => {
+      const deletedThread = payload.old;
+      setThreads(prev => prev.filter(thread => thread.id !== deletedThread.id));
+    }
+  });
+
+  // Real-time subscriptions for posts (to update thread previews)
+  useRealtime({
+    table: 'posts',
+    onInsert: (payload) => {
+      const newPost = payload.new;
+      // Update thread's post count and latest activity
+      setThreads(prev => prev.map(thread => {
+        if (thread.id === newPost.thread_id) {
+          return {
+            ...thread,
+            posts: thread.posts ? [...thread.posts, newPost] : [newPost],
+            updated_at: newPost.created_at
+          };
+        }
+        return thread;
+      }));
+    }
+  });
+
+  // Real-time subscriptions for comments
+  useRealtime({
+    table: 'comments',
+    onInsert: (payload) => {
+      const newComment = payload.new;
+      // Update comment counts in thread previews
+      setThreads(prev => prev.map(thread => {
+        const threadPost = thread.posts?.[0];
+        if (threadPost && threadPost.id === newComment.post_id) {
+          return {
+            ...thread,
+            posts: [{
+              ...threadPost,
+              comments: [...(threadPost.comments || []), newComment]
+            }]
+          };
+        }
+        return thread;
+      }));
+    }
+  });
 
   const fetchData = async () => {
     try {
@@ -114,7 +220,7 @@ export default function Home() {
     }
   };
 
-  const fetchThreads = async (categoryId?: string) => {
+  const fetchThreads = async (categoryId?: string, page = 0, limit = 10) => {
     try {
       let query = supabase
         .from('threads')
@@ -132,7 +238,8 @@ export default function Home() {
             )
           )
         `)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1);
 
       if (categoryId) {
         query = query.eq('category_id', categoryId);
@@ -145,9 +252,17 @@ export default function Home() {
       }
       
       console.log('Fetched threads with users:', data?.[0]); // Debug log
-      setThreads(data || []);
+      
+      if (page === 0) {
+        setThreads(data || []);
+      } else {
+        setThreads(prev => [...prev, ...(data || [])]);
+      }
+      
+      return (data?.length || 0) === limit; // Return true if more data might be available
     } catch (error) {
       console.error('Error fetching threads:', error);
+      return false;
     }
   };
 
@@ -160,7 +275,15 @@ export default function Home() {
         .insert([{ post_id: postId, user_id: user.id }]);
       
       if (!error) {
-        fetchThreads(activeTab === 'all' ? undefined : activeTab);
+        // Update the threads state instead of refetching
+        setThreads(prev => prev.map(thread => ({
+          ...thread,
+          posts: thread.posts.map(post => 
+            post.id === postId 
+              ? { ...post, likes: [...post.likes, { id: 'temp-' + Date.now() }] }
+              : post
+          )
+        })));
       }
     } catch (error) {
       console.error('Error liking post:', error);
@@ -172,15 +295,20 @@ export default function Home() {
 
     setCommenting(prev => ({ ...prev, [postId]: true }));
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('comments')
         .insert([{ 
           post_id: postId, 
           user_id: user.id, 
           content: newComment[postId].trim() 
-        }]);
+        }])
+        .select()
+        .single();
       
-      if (!error) {
+      if (!error && data) {
+        // Process mentions in the new comment
+        await processMentions(newComment[postId].trim(), user.id, undefined, data.id);
+        
         setNewComment(prev => ({ ...prev, [postId]: '' }));
         fetchThreads(activeTab === 'all' ? undefined : activeTab);
       }
@@ -188,6 +316,16 @@ export default function Home() {
       console.error('Error commenting:', error);
     } finally {
       setCommenting(prev => ({ ...prev, [postId]: false }));
+    }
+  };
+
+  const handleRefresh = () => {
+    setCurrentPage(0);
+    setThreads([]);
+    if (activeTab === 'all') {
+      fetchThreads();
+    } else {
+      fetchThreads(activeTab);
     }
   };
 
@@ -244,14 +382,6 @@ export default function Home() {
             <Bitcoin className="h-10 w-10 text-orange-500" />
             <h1 className="text-3xl font-bold text-white">Bitcoin Forum</h1>
           </div>
-          {user && categories.length > 0 && (
-            <Link href={`/category/${activeTab === 'all' ? categories[0].id : activeTab}`}>
-              <Button className="bg-orange-500 hover:bg-orange-600 text-white">
-                <Plus className="h-4 w-4 mr-2" />
-                New Post
-              </Button>
-            </Link>
-          )}
         </div>
 
         {/* Category Tabs */}
@@ -281,6 +411,30 @@ export default function Home() {
           ))}
         </div>
 
+        {/* Posts Feed Header with New Thread and Refresh */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-semibold text-white">Latest Discussions</h2>
+          <div className="flex items-center space-x-3">
+            {user && (
+              <Link href="/new-thread">
+                <Button className="bg-orange-500 hover:bg-orange-600 text-white font-medium">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Thread
+                </Button>
+              </Link>
+            )}
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              size="sm"
+              className="border-zinc-700 text-gray-300 hover:bg-zinc-800"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+        </div>
+
         {/* Posts Feed */}
         <div className="space-y-6">
           {threads.length === 0 ? (
@@ -303,11 +457,13 @@ export default function Home() {
                         </CardTitle>
                       </Link>
                       <div className="flex items-center space-x-4 text-sm text-gray-400">
-                        <UserBadge 
-                          username={getUsername(thread.users)} 
-                          role={getUserRole(thread.users)}
-                          className="text-sm"
-                        />
+                        <Link href={`/user/${getUsername(thread.users)}`}>
+                          <UserBadge 
+                            username={getUsername(thread.users)} 
+                            role={getUserRole(thread.users)}
+                            className="text-sm hover:text-orange-400"
+                          />
+                        </Link>
                         <div className="flex items-center space-x-1">
                           <MessageSquare className="h-4 w-4" />
                           <span>{thread.posts?.length || 0} replies</span>
@@ -339,7 +495,9 @@ export default function Home() {
                           </span>
                         </div>
                         
-                        <p className="text-gray-300 mb-3 line-clamp-3">{thread.posts[0].content}</p>
+                        <div className="text-gray-300 mb-3 line-clamp-3">
+                          <ValidatedMarkdown content={thread.posts[0].content} />
+                        </div>
                         
                         {/* Media Display */}
                         {thread.posts[0].image_url && (
@@ -359,13 +517,7 @@ export default function Home() {
                         {/* Interaction buttons */}
                         <div className="flex items-center justify-between mb-4">
                           <div className="flex items-center space-x-4">
-                            <button
-                              onClick={() => handleLike(thread.posts[0].id)}
-                              className="flex items-center space-x-1 text-gray-400 hover:text-red-500 transition-colors"
-                            >
-                              <Heart className="h-4 w-4" />
-                              <span>{thread.posts[0].likes?.length || 0}</span>
-                            </button>
+                            <ReactionButton postId={thread.posts[0].id} />
                             <button
                               onClick={() => toggleComments(thread.posts[0].id)}
                               className="flex items-center space-x-1 text-gray-400 hover:text-blue-500 transition-colors"
@@ -405,7 +557,9 @@ export default function Home() {
                                         {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                                       </span>
                                     </div>
-                                    <p className="text-gray-300 text-sm">{comment.content}</p>
+                                    <div className="text-gray-300 text-sm">
+                                      <ValidatedMarkdown content={comment.content} />
+                                    </div>
                                     {comment.image_url && (
                                       <img src={comment.image_url} alt="Comment image" className="max-w-xs h-auto rounded mt-2" />
                                     )}
@@ -421,22 +575,23 @@ export default function Home() {
 
                             {/* Add comment */}
                             {user && (
-                              <div className="flex space-x-2">
-                                <Textarea
-                                  placeholder="Write a comment..."
+                              <div className="space-y-2">
+                                <MentionInput
                                   value={newComment[thread.posts[0].id] || ''}
-                                  onChange={(e) => setNewComment(prev => ({ ...prev, [thread.posts[0].id]: e.target.value }))}
-                                  rows={2}
-                                  className="bg-zinc-700 border-zinc-600 text-white text-sm"
+                                  onChange={(value) => setNewComment(prev => ({ ...prev, [thread.posts[0].id]: value }))}
+                                  placeholder="Write a comment..."
+                                  className="bg-zinc-700 border-zinc-600 text-white text-sm rounded-md p-2 w-full resize-none"
                                 />
-                                <Button
-                                  onClick={() => handleComment(thread.posts[0].id)}
-                                  disabled={commenting[thread.posts[0].id] || !newComment[thread.posts[0].id]?.trim()}
-                                  size="sm"
-                                  className="bg-orange-500 hover:bg-orange-600"
-                                >
-                                  {commenting[thread.posts[0].id] ? '...' : 'Post'}
-                                </Button>
+                                <div className="flex justify-end">
+                                  <Button
+                                    onClick={() => handleComment(thread.posts[0].id)}
+                                    disabled={commenting[thread.posts[0].id] || !newComment[thread.posts[0].id]?.trim()}
+                                    size="sm"
+                                    className="bg-orange-500 hover:bg-orange-600"
+                                  >
+                                    {commenting[thread.posts[0].id] ? '...' : 'Post'}
+                                  </Button>
+                                </div>
                               </div>
                             )}
                           </div>
@@ -447,6 +602,18 @@ export default function Home() {
                 </CardContent>
               </Card>
             ))
+          )}
+          
+          {/* Infinite scroll trigger */}
+          {threads.length > 0 && (
+            <div ref={lastElementRef} className="py-4">
+              {isFetching && (
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                  <p className="text-gray-400 mt-2">Loading more threads...</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

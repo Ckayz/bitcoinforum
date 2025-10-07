@@ -2,10 +2,25 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { Navbar } from '@/components/Navbar';
+import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { RichTextViewer } from '@/components/RichTextViewer';
 import Link from 'next/link';
-import { Bitcoin, MessageSquare, Heart, Share2, MoreHorizontal } from 'lucide-react';
+import { Bitcoin, MessageSquare, Heart, Share2, MoreHorizontal, Plus, Shield } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+
+// Helper function to extract plain text from HTML content
+const extractTextFromHTML = (html: string): string => {
+  if (typeof window !== 'undefined') {
+    const div = document.createElement('div');
+    div.innerHTML = html;
+    return div.textContent || div.innerText || '';
+  }
+  // Server-side fallback - simple regex to remove HTML tags
+  return html.replace(/<[^>]*>/g, '').replace(/&[^;]+;/g, ' ').trim();
+};
 
 interface Thread {
   id: string;
@@ -15,7 +30,8 @@ interface Thread {
   users: {
     username: string;
     role?: string;
-  }[] | null;
+    avatar_url?: string;
+  } | null;
   posts: {
     id: string;
     content: string;
@@ -25,34 +41,45 @@ interface Thread {
 }
 
 export default function NewsPage() {
+  const { user } = useAuth();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
     fetchNewsThreads();
-  }, []);
+    if (user) {
+      checkUserRole();
+    }
+  }, [user]);
+
+  const checkUserRole = async () => {
+    if (!user) return;
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (data && !error) {
+      setUserRole(data.role);
+    }
+  };
 
   const fetchNewsThreads = async () => {
     try {
-      const { data: categories } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('name', 'News')
-        .single();
+      // Use the category ID directly instead of searching by name
+      const categoryId = 'd780a77d-8fed-446d-bc28-04c60537dc78';
 
-      if (!categories) {
-        setLoading(false);
-        return;
-      }
-
-      const { data: threadsData } = await supabase
+      const { data: threadsData, error } = await supabase
         .from('threads')
         .select(`
           id, title, created_at, user_id,
-          users (username, role),
+          users!threads_user_id_fkey (username, role, avatar_url),
           posts (id, content, image_url, video_url)
         `)
-        .eq('category_id', categories.id)
+        .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
 
       setThreads(threadsData || []);
@@ -94,9 +121,29 @@ export default function NewsPage() {
       <div className="max-w-2xl mx-auto border-x border-zinc-800 min-h-screen">
         {/* Header */}
         <div className="sticky top-0 bg-black/80 backdrop-blur-md border-b border-zinc-800 p-4">
-          <div className="flex items-center space-x-3">
-            <Bitcoin className="h-6 w-6 text-orange-500" />
-            <h1 className="text-xl font-bold">Bitcoin News</h1>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <Bitcoin className="h-6 w-6 text-orange-500" />
+              <h1 className="text-xl font-bold">Bitcoin News</h1>
+              {/* Verified Badge Info */}
+              {user && userRole === 'verified' && (
+                <div className="flex items-center space-x-2 text-sm text-blue-400">
+                  <Shield className="h-4 w-4" />
+                  <span className="hidden sm:inline">Verified Publisher</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Create News Button for Verified Users */}
+            {user && userRole === 'verified' && (
+              <Link href="/news/create">
+                <Button size="sm" className="bg-orange-500 hover:bg-orange-600 text-white">
+                  <Plus className="h-4 w-4 mr-2" />
+                  <span className="hidden sm:inline">Create News</span>
+                  <span className="sm:hidden">Create</span>
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -112,19 +159,22 @@ export default function NewsPage() {
               <Link key={thread.id} href={`/thread/${thread.id}`}>
                 <article className="border-b border-zinc-800 p-4 hover:bg-zinc-950/50 transition-colors cursor-pointer">
                   <div className="flex space-x-3">
-                    {/* Avatar */}
-                    <div className="w-12 h-12 bg-orange-500 rounded-full flex items-center justify-center flex-shrink-0">
-                      <Bitcoin className="h-6 w-6 text-white" />
-                    </div>
+                    {/* User Avatar */}
+                    <Avatar className="h-12 w-12 flex-shrink-0">
+                      <AvatarImage src={thread.users?.avatar_url} alt={thread.users?.username} />
+                      <AvatarFallback className="bg-orange-500 text-white">
+                        {thread.users?.username?.charAt(0).toUpperCase() || 'B'}
+                      </AvatarFallback>
+                    </Avatar>
                     
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       {/* Header */}
                       <div className="flex items-center space-x-2 mb-1">
                         <span className="font-bold text-white">
-                          {thread.users?.[0]?.username || 'Bitcoin News'}
+                          {thread.users?.username || 'Bitcoin News'}
                         </span>
-                        {thread.users?.[0]?.role === 'verified' && (
+                        {thread.users?.role === 'verified' && (
                           <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-xs">✓</span>
                           </div>
@@ -146,10 +196,12 @@ export default function NewsPage() {
                       {/* Content Preview */}
                       {thread.posts && thread.posts[0] && thread.posts[0].content && (
                         <div className="text-gray-300 mb-3 leading-relaxed">
-                          {thread.posts[0].content.length > 200 
-                            ? thread.posts[0].content.substring(0, 200) + '...'
-                            : thread.posts[0].content
-                          }
+                          {(() => {
+                            const textContent = extractTextFromHTML(thread.posts[0].content);
+                            return textContent.length > 200 
+                              ? textContent.substring(0, 200) + '...'
+                              : textContent;
+                          })()}
                         </div>
                       )}
                       

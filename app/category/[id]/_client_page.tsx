@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Bitcoin, MessageSquare, Clock, User, Plus, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { AuthRequired } from '@/components/AuthRequired';
 import { Navbar } from '@/components/Navbar';
 import { formatDistanceToNow } from 'date-fns';
@@ -48,6 +49,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
   const [showNewThread, setShowNewThread] = useState(false);
   const [showAuthRequired, setShowAuthRequired] = useState(false);
   const [newThreadTitle, setNewThreadTitle] = useState('');
+  const [currentPage, setCurrentPage] = useState(0);
   const [newThreadContent, setNewThreadContent] = useState('');
   const [newThreadImage, setNewThreadImage] = useState('');
   const [newThreadVideo, setNewThreadVideo] = useState('');
@@ -55,29 +57,42 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
 
+  // Infinite scroll fetch function
+  const fetchMoreThreads = async (): Promise<boolean> => {
+    const nextPage = currentPage + 1;
+    const hasMore = await fetchCategoryAndThreads(nextPage);
+    setCurrentPage(nextPage);
+    return hasMore;
+  };
+
+  const { lastElementRef, isFetching } = useInfiniteScroll(fetchMoreThreads);
+
   useEffect(() => {
     if (categoryId) {
+      setCurrentPage(0);
       fetchCategoryAndThreads();
     }
   }, [categoryId]);
 
-  const fetchCategoryAndThreads = async () => {
+  const fetchCategoryAndThreads = async (page = 0, limit = 10) => {
     try {
       console.log('Fetching category and threads for ID:', categoryId);
 
-      // Fetch category
-      const { data: categoryData, error: categoryError } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('id', categoryId)
-        .single();
+      // Only fetch category on first load
+      if (page === 0) {
+        const { data: categoryData, error: categoryError } = await supabase
+          .from('categories')
+          .select('*')
+          .eq('id', categoryId)
+          .single();
 
-      if (categoryError) {
-        console.error('Category error:', categoryError);
-        throw categoryError;
+        if (categoryError) {
+          console.error('Category error:', categoryError);
+          throw categoryError;
+        }
+        console.log('Category data:', categoryData);
+        setCategory(categoryData);
       }
-      console.log('Category data:', categoryData);
-      setCategory(categoryData);
 
       // Fetch threads with user info and post count
       const { data: threadsData, error: threadsError } = await supabase
@@ -91,18 +106,30 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
           posts (id)
         `)
         .eq('category_id', categoryId)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(page * limit, (page + 1) * limit - 1);
 
       if (threadsError) {
         console.error('Threads error:', threadsError);
         throw threadsError;
       }
+      
       console.log('Threads data:', threadsData);
-      setThreads(threadsData || []);
+      
+      if (page === 0) {
+        setThreads(threadsData || []);
+      } else {
+        setThreads(prev => [...prev, ...(threadsData || [])]);
+      }
+      
+      return (threadsData?.length || 0) === limit;
     } catch (error) {
       console.error('Error fetching data:', error);
+      return false;
     } finally {
-      setLoading(false);
+      if (page === 0) {
+        setLoading(false);
+      }
     }
   };
 
@@ -280,7 +307,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
           </Link>
         </div>
 
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <Bitcoin className="h-8 w-8 text-orange-500" />
@@ -290,7 +317,7 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
           </div>
           <Button
             onClick={handleNewThread}
-            className="bg-orange-500 hover:bg-orange-600 text-white"
+            className="bg-orange-500 hover:bg-orange-600 text-white font-medium px-6 py-2 whitespace-nowrap"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Thread
@@ -454,6 +481,18 @@ export function ClientCategoryPage({ categoryId }: ClientCategoryPageProps) {
                 </Card>
               </Link>
             ))
+          )}
+          
+          {/* Infinite scroll trigger */}
+          {threads.length > 0 && (
+            <div ref={lastElementRef} className="py-4">
+              {isFetching && (
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                  <p className="text-gray-400 mt-2">Loading more threads...</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

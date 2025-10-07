@@ -80,11 +80,211 @@
     @apply bg-background text-foreground;
   }
 }
+
 @layer utilities {
   .line-clamp-3 {
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
+  }
+}
+
+/* Enhanced contrast and visibility fixes */
+@layer components {
+  /* Global text improvements */
+  .text-white {
+    color: #ffffff !important;
+  }
+  
+  .text-gray-100 {
+    color: #f3f4f6 !important;
+  }
+  
+  .text-gray-200 {
+    color: #e5e7eb !important;
+  }
+  
+  .text-gray-300 {
+    color: #d1d5db !important;
+  }
+  
+  .text-gray-400 {
+    color: #9ca3af !important;
+  }
+  
+  .text-gray-500 {
+    color: #6b7280 !important;
+  }
+
+  /* Button contrast fixes */
+  button {
+    font-weight: 500 !important;
+  }
+  
+  .bg-orange-500 {
+    background-color: #f97316 !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-orange-600 {
+    background-color: #ea580c !important;
+    color: #ffffff !important;
+  }
+  
+  .hover\:bg-orange-600:hover {
+    background-color: #ea580c !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-zinc-700 {
+    background-color: #3f3f46 !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-zinc-800 {
+    background-color: #27272a !important;
+    color: #ffffff !important;
+  }
+  
+  .hover\:bg-zinc-700:hover {
+    background-color: #3f3f46 !important;
+    color: #ffffff !important;
+  }
+  
+  .hover\:bg-zinc-800:hover {
+    background-color: #27272a !important;
+    color: #ffffff !important;
+  }
+
+  /* Input field improvements */
+  input, textarea, select {
+    background-color: #27272a !important;
+    border-color: #52525b !important;
+    color: #ffffff !important;
+  }
+  
+  input::placeholder, textarea::placeholder {
+    color: #9ca3af !important;
+  }
+  
+  input:focus, textarea:focus, select:focus {
+    border-color: #f97316 !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.2) !important;
+  }
+
+  /* Link improvements */
+  a {
+    color: #f97316 !important;
+  }
+  
+  a:hover {
+    color: #ea580c !important;
+  }
+  
+  .text-orange-500 {
+    color: #f97316 !important;
+  }
+  
+  .text-orange-400 {
+    color: #fb923c !important;
+  }
+  
+  .hover\:text-orange-500:hover {
+    color: #f97316 !important;
+  }
+  
+  .hover\:text-orange-400:hover {
+    color: #fb923c !important;
+  }
+
+  /* Card and container improvements */
+  .bg-zinc-900 {
+    background-color: #18181b !important;
+    color: #ffffff !important;
+  }
+  
+  .border-zinc-800 {
+    border-color: #27272a !important;
+  }
+  
+  .border-zinc-700 {
+    border-color: #3f3f46 !important;
+  }
+  
+  .border-zinc-600 {
+    border-color: #52525b !important;
+  }
+
+  /* Specific component fixes */
+  .prose-invert {
+    color: #ffffff !important;
+  }
+  
+  .prose-invert h1, .prose-invert h2, .prose-invert h3 {
+    color: #ffffff !important;
+  }
+  
+  .prose-invert p {
+    color: #e5e7eb !important;
+  }
+  
+  .prose-invert strong {
+    color: #ffffff !important;
+  }
+  
+  .prose-invert code {
+    background-color: #374151 !important;
+    color: #f9fafb !important;
+  }
+
+  /* Navigation improvements */
+  nav a {
+    color: #d1d5db !important;
+  }
+  
+  nav a:hover {
+    color: #f97316 !important;
+  }
+
+  /* Modal and dialog improvements */
+  .bg-zinc-900 {
+    color: #ffffff !important;
+  }
+  
+  .text-zinc-400 {
+    color: #a1a1aa !important;
+  }
+  
+  .text-zinc-300 {
+    color: #d4d4d8 !important;
+  }
+
+  /* Form label improvements */
+  label {
+    color: #e5e7eb !important;
+    font-weight: 500 !important;
+  }
+
+  /* Badge improvements */
+  .bg-blue-500 {
+    background-color: #3b82f6 !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-green-500 {
+    background-color: #10b981 !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-red-500 {
+    background-color: #ef4444 !important;
+    color: #ffffff !important;
+  }
+  
+  .bg-yellow-500 {
+    background-color: #eab308 !important;
+    color: #000000 !important;
   }
 }

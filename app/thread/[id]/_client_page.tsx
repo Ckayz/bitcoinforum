@@ -9,9 +9,20 @@ import { Input } from '@/components/ui/input';
 import { Bitcoin, MessageSquare, Clock, User, ArrowLeft, Heart, Image, Video, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
+import { useRealtime } from '@/hooks/useRealtime';
+import { processMentions } from '@/lib/mentions';
 import { AuthRequired } from '@/components/AuthRequired';
 import { Navbar } from '@/components/Navbar';
 import { ShareModal } from '@/components/modals/ShareModal';
+import { PostEdit } from '@/components/PostEdit';
+import { Markdown } from '@/components/Markdown';
+import { ValidatedMarkdown } from '@/components/ValidatedMarkdown';
+import { RichTextViewer } from '@/components/RichTextViewer';
+import { MarkdownEditor } from '@/components/MarkdownEditor';
+import { RichTextEditor } from '@/components/RichTextEditor';
+import { ReactionButton } from '@/components/ReactionButton';
+import { ReportButton } from '@/components/ReportButton';
 import { formatDistanceToNow } from 'date-fns';
 
 interface Thread {
@@ -38,12 +49,13 @@ interface Post {
   id: string;
   content: string;
   created_at: string;
+  edited_at?: string;
   user_id: string;
   image_url?: string;
   video_url?: string;
-  users: { username: string }[];  // 👈 make this an array
+  users: { username: string } | { username: string }[];
   likes: { id: string; user_id: string }[];
-  comments?: Comment[];           // 👈 already array, but inside each comment users is array
+  comments?: Comment[];
 }
 
 interface ClientThreadPageProps {
@@ -61,35 +73,113 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
   const [uploading, setUploading] = useState(false);
   const [posting, setPosting] = useState(false);
   const [expandedComments, setExpandedComments] = useState<Set<string>>(new Set());
+  const [editingPosts, setEditingPosts] = useState<Set<string>>(new Set());
   const [newCommentContent, setNewCommentContent] = useState<{[key: string]: string}>({});
   const [newCommentImage, setNewCommentImage] = useState<{[key: string]: string}>({});
   const [commenting, setCommenting] = useState<{[key: string]: boolean}>({});
+  const [currentPage, setCurrentPage] = useState(0);
   const [shareModal, setShareModal] = useState<{isOpen: boolean; url: string; title: string}>({
     isOpen: false,
     url: '',
     title: ''
   });
 
+  // Infinite scroll fetch function
+  const fetchMorePosts = async (): Promise<boolean> => {
+    const nextPage = currentPage + 1;
+    const hasMore = await fetchThreadAndPosts(nextPage);
+    setCurrentPage(nextPage);
+    return hasMore;
+  };
+
+  const { lastElementRef, isFetching } = useInfiniteScroll(fetchMorePosts);
+
   useEffect(() => {
     if (threadId) {
+      setCurrentPage(0);
       fetchThreadAndPosts();
     }
   }, [threadId]);
 
-  const fetchThreadAndPosts = async () => {
-    try {
-      const { data: threadData, error: threadError } = await supabase
-        .from('threads')
-        .select(`
-          id, title, created_at, user_id, category_id,
-          categories (name),
-          users!threads_user_id_fkey (username)
-        `)
-        .eq('id', threadId)
-        .single();
+  // Real-time subscriptions for posts
+  useRealtime({
+    table: 'posts',
+    filter: `thread_id=eq.${threadId}`,
+    onInsert: (payload) => {
+      // Add new post to the list
+      const newPost = payload.new;
+      setPosts(prev => [...prev, { ...newPost, likes: [], comments: [] }]);
+    },
+    onUpdate: (payload) => {
+      // Update existing post
+      const updatedPost = payload.new;
+      setPosts(prev => prev.map(post => 
+        post.id === updatedPost.id 
+          ? { ...post, ...updatedPost }
+          : post
+      ));
+    },
+    onDelete: (payload) => {
+      // Remove deleted post
+      const deletedPost = payload.old;
+      setPosts(prev => prev.filter(post => post.id !== deletedPost.id));
+    }
+  });
 
-      if (threadError) throw threadError;
-      setThread(threadData);
+  // Real-time subscriptions for comments
+  useRealtime({
+    table: 'comments',
+    onInsert: (payload) => {
+      const newComment = payload.new;
+      setPosts(prev => prev.map(post => {
+        if (post.id === newComment.post_id) {
+          return {
+            ...post,
+            comments: [...(post.comments || []), newComment]
+          };
+        }
+        return post;
+      }));
+    },
+    onDelete: (payload) => {
+      const deletedComment = payload.old;
+      setPosts(prev => prev.map(post => ({
+        ...post,
+        comments: post.comments?.filter(comment => comment.id !== deletedComment.id) || []
+      })));
+    }
+  });
+
+  // Real-time subscriptions for reactions
+  useRealtime({
+    table: 'reactions',
+    onInsert: () => {
+      // Refresh posts to get updated reaction counts
+      fetchThreadAndPosts(0, posts.length || 10);
+    },
+    onDelete: () => {
+      // Refresh posts to get updated reaction counts
+      fetchThreadAndPosts(0, posts.length || 10);
+    }
+  });
+
+  const fetchThreadAndPosts = async (page = 0, limit = 10) => {
+    try {
+      // Only fetch thread data on first load
+      if (page === 0) {
+        const { data: threadData, error: threadError } = await supabase
+          .from('threads')
+          .select(`
+            id, title, created_at, user_id, category_id,
+            categories (name),
+            users!threads_user_id_fkey (username)
+          `)
+          .eq('id', threadId)
+          .single();
+
+        if (threadError) throw threadError;
+        setThread(threadData);
+      }
 
       const { data: postsData, error: postsError } = await supabase
         .from('posts')
@@ -103,14 +193,28 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           )
         `)
         .eq('thread_id', threadId)
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: true })
+        .range(page * limit, (page + 1) * limit - 1);
 
       if (postsError) throw postsError;
-      setPosts(postsData || []);
+      
+      // Debug log to see data structure
+      console.log('Posts data:', postsData?.[0]);
+      
+      if (page === 0) {
+        setPosts(postsData || []);
+      } else {
+        setPosts(prev => [...prev, ...(postsData || [])]);
+      }
+      
+      return (postsData?.length || 0) === limit;
     } catch (error) {
       console.error('Error fetching data:', error);
+      return false;
     } finally {
-      setLoading(false);
+      if (page === 0) {
+        setLoading(false);
+      }
     }
   };
 
@@ -120,16 +224,21 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
 
     setPosting(true);
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('posts')
         .insert([{
           thread_id: thread.id,
           user_id: user.id,
           content: newPostContent,
           image_url: newPostImage || null,
-        }]);
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Process mentions in the new post
+      await processMentions(newPostContent, user.id, data.id);
 
       setNewPostContent('');
       setNewPostImage('');
@@ -163,6 +272,35 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
     }
   };
 
+  const getUsername = (users: any) => {
+    if (Array.isArray(users)) {
+      return users[0]?.username || 'Unknown User';
+    }
+    return users?.username || 'Unknown User';
+  };
+
+  const handlePostUpdate = (postId: string, newContent: string, editedAt: string) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, content: newContent, edited_at: editedAt }
+          : post
+      )
+    );
+  };
+
+  const handleEditToggle = (postId: string, editing: boolean) => {
+    setEditingPosts(prev => {
+      const newSet = new Set(prev);
+      if (editing) {
+        newSet.add(postId);
+      } else {
+        newSet.delete(postId);
+      }
+      return newSet;
+    });
+  };
+
   const toggleComments = (postId: string) => {
     const newExpanded = new Set(expandedComments);
     if (newExpanded.has(postId)) {
@@ -184,16 +322,21 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
 
     setCommenting(prev => ({ ...prev, [postId]: true }));
     try {
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('comments')
         .insert([{
           post_id: postId,
           user_id: user.id,
           content: content.trim(),
           image_url: newCommentImage[postId] || null,
-        }]);
+        }])
+        .select()
+        .single();
 
       if (error) throw error;
+
+      // Process mentions in the new comment
+      await processMentions(content.trim(), user.id, undefined, data.id);
 
       setNewCommentContent(prev => ({ ...prev, [postId]: '' }));
       setNewCommentImage(prev => ({ ...prev, [postId]: '' }));
@@ -313,7 +456,10 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           <div className="flex items-center space-x-4 text-sm text-gray-400">
             <div className="flex items-center space-x-1">
               <User className="h-4 w-4" />
-              <span>Started by {thread.users?.[0]?.username || 'Unknown User'}</span>
+              <span>Started by </span>
+              <Link href={`/user/${getUsername(thread.users)}`} className="text-orange-400 hover:text-orange-300">
+                {getUsername(thread.users)}
+              </Link>
             </div>
             <div className="flex items-center space-x-1">
               <Clock className="h-4 w-4" />
@@ -337,18 +483,51 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                     </div>
                     <div>
                       <div className="font-semibold text-white">
-                        {post.users?.[0]?.username || 'Unknown User'}
+                        <Link href={`/user/${getUsername(post.users)}`} className="hover:text-orange-400">
+                          {getUsername(post.users)}
+                        </Link>
                       </div>
                       <div className="text-sm text-gray-400">
                         {index === 0 ? 'Original Post' : `Post #${index + 1}`} • {formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}
+                        {post.edited_at && (
+                          <span className="ml-2 text-xs text-orange-400">
+                            • Edited {formatDistanceToNow(new Date(post.edited_at), { addSuffix: true })}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
+                  
+                  {/* Edit Button - Positioned in top right */}
+                  {user && user.id === post.user_id && !editingPosts.has(post.id) && (
+                    <PostEdit
+                      postId={post.id}
+                      initialContent={post.content}
+                      isAuthor={true}
+                      isEditing={false}
+                      onUpdate={(newContent, editedAt) => handlePostUpdate(post.id, newContent, editedAt)}
+                      onEditToggle={(editing) => handleEditToggle(post.id, editing)}
+                    />
+                  )}
                 </div>
                 
-                <div className="text-gray-200 mb-4 whitespace-pre-wrap">
-                  {post.content}
-                </div>
+                {/* Content Area - Show editor if editing, otherwise show content */}
+                {editingPosts.has(post.id) && user && user.id === post.user_id ? (
+                  <div className="mb-4">
+                    <PostEdit
+                      postId={post.id}
+                      initialContent={post.content}
+                      isAuthor={true}
+                      isEditing={true}
+                      onUpdate={(newContent, editedAt) => handlePostUpdate(post.id, newContent, editedAt)}
+                      onEditToggle={(editing) => handleEditToggle(post.id, editing)}
+                    />
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <RichTextViewer content={post.content} />
+                  </div>
+                )}
 
                 {post.image_url && (
                   <div className="mb-4">
@@ -365,17 +544,12 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                 )}
 
                 <div className="flex items-center space-x-4 mb-4">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleLike(post.id)}
-                    className={`text-gray-400 hover:text-red-500 ${
-                      post.likes.some(like => like.user_id === user?.id) ? 'text-red-500' : ''
-                    }`}
-                  >
-                    <Heart className="h-4 w-4 mr-1" />
-                    {post.likes.length}
-                  </Button>
+                  <ReactionButton postId={post.id} />
+                  <ReportButton 
+                    contentType="post" 
+                    contentId={post.id} 
+                    reportedUserId={post.user_id} 
+                  />
                   
                   <Button
                     variant="ghost"
@@ -408,17 +582,27 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
                               <div className="w-6 h-6 bg-gray-600 rounded-full flex items-center justify-center">
                                 <User className="h-3 w-3 text-white" />
                               </div>
-                              <span className="text-sm font-medium text-white">
-                                {comment.users?.[0]?.username || 'Unknown User'}
-                              </span>
+                              <Link href={`/user/${getUsername(comment.users)}`} className="text-sm font-medium text-white hover:text-orange-400">
+                                {getUsername(comment.users)}
+                              </Link>
                               <span className="text-xs text-gray-400">
                                 {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
                               </span>
                             </div>
-                            <p className="text-gray-300 text-sm mb-2">{comment.content}</p>
+                            <div className="mb-2">
+                              <RichTextViewer content={comment.content} />
+                            </div>
                             {comment.image_url && (
                               <img src={comment.image_url} alt="Comment image" className="max-w-xs h-auto rounded mt-2" />
                             )}
+                            <div className="mt-2 flex items-center space-x-2">
+                              <ReactionButton commentId={comment.id} />
+                              <ReportButton 
+                                contentType="comment" 
+                                contentId={comment.id} 
+                                reportedUserId={comment.user_id} 
+                              />
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -426,12 +610,11 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
 
                     {user ? (
                       <div className="space-y-3">
-                        <Textarea
+                        <RichTextEditor
+                          content={newCommentContent[post.id] || ''}
+                          onChange={(value) => setNewCommentContent(prev => ({ ...prev, [post.id]: value }))}
                           placeholder="Write a comment..."
-                          value={newCommentContent[post.id] || ''}
-                          onChange={(e) => setNewCommentContent(prev => ({ ...prev, [post.id]: e.target.value }))}
-                          rows={2}
-                          className="bg-zinc-800 border-zinc-700 text-white focus:border-orange-500 text-sm"
+                          className="min-h-[120px]"
                         />
                         <div className="flex items-center space-x-2">
                           <input
@@ -478,6 +661,18 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
               </CardContent>
             </Card>
           ))}
+          
+          {/* Infinite scroll trigger */}
+          {posts.length > 0 && (
+            <div ref={lastElementRef} className="py-4">
+              {isFetching && (
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                  <p className="text-gray-400 mt-2">Loading more posts...</p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <Card className="bg-zinc-900 border-zinc-800">
@@ -490,13 +685,11 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           <CardContent>
             {user ? (
               <form onSubmit={handleCreatePost} className="space-y-4">
-                <Textarea
-                  placeholder="What are your thoughts?"
+                <MarkdownEditor
                   value={newPostContent}
-                  onChange={(e) => setNewPostContent(e.target.value)}
-                  required
-                  rows={5}
-                  className="bg-zinc-800 border-zinc-700 text-white focus:border-orange-500"
+                  onChange={setNewPostContent}
+                  placeholder="What are your thoughts?"
+                  minHeight="min-h-[150px]"
                 />
                 
                 <div className="space-y-2">
