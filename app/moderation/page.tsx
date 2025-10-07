@@ -21,10 +21,10 @@ interface Report {
   created_at: string;
   content_type: string;
   content_id: string;
-  reporter: ReportUser | null;        // allow null
-  reported_user: ReportUser | null;   // allow null
-  content_preview?: string;
+  reporter: ReportUser;       // a single object, not an array
+  reported_user: ReportUser;  // a single object, not an array
 }
+
 
 
 export default function ModerationPage() {
@@ -64,27 +64,37 @@ export default function ModerationPage() {
       let query = supabase
         .from('reports')
         .select(`
-          id, reason, description, status, created_at, content_type, content_id,
+          id,
+          reason,
+          description,
+          status,
+          created_at,
+          content_type,
+          content_id,
           reporter:users!reports_reporter_id_fkey(username),
           reported_user:users!reports_reported_user_id_fkey(username)
         `)
         .order('created_at', { ascending: false });
-
+  
       if (activeTab !== 'all') {
         query = query.eq('status', activeTab);
       }
-
+  
       const { data } = await query;
-      const transformedData: Report[] = (data || []).map((report: any) => ({
-        ...report,
-        reporter: report.reporter?.[0] || { username: 'Unknown' },
-        reported_user: report.reported_user?.[0] || { username: 'Unknown' }
+  
+      // 🔧 normalize: Supabase returns arrays for these joins
+      const transformedData: Report[] = (data || []).map((r: any) => ({
+        ...r,
+        reporter: r.reporter?.[0] || { username: 'Unknown' },
+        reported_user: r.reported_user?.[0] || { username: 'Unknown' },
       }));
+  
       setReports(transformedData);
     } catch (error) {
       console.error('Error fetching reports:', error);
     }
   };
+  
 
   const handleReportAction = async (reportId: string, action: 'dismiss' | 'resolve') => {
     try {
