@@ -19,8 +19,8 @@ interface Report {
   created_at: string;
   content_type: string;
   content_id: string;
-  reporter: { username: string };
-  reported_user: { username: string };
+  reporter: { username: string }[];
+  reported_user: { username: string }[];
   content_preview?: string;
 }
 
@@ -328,11 +328,11 @@ export default function ModerationPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                           <p className="text-sm text-gray-400">Reporter</p>
-                          <p className="text-white">{report.reporter?.username}</p>
+                          <p className="text-white">{report.reporter?.[0]?.username || 'Unknown'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-400">Reported User</p>
-                          <p className="text-white">{report.reported_user?.username}</p>
+                          <p className="text-white">{report.reported_user?.[0]?.username || 'Unknown'}</p>
                         </div>
                       </div>
 
