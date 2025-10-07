@@ -12,16 +12,16 @@ import { Shield, Flag, Ban, Eye, Trash2, Lock, AlertTriangle } from 'lucide-reac
 import { formatDistanceToNow } from 'date-fns';
 
 interface Report {
-  id: string;
-  reason: string;
-  description: string;
-  status: string;
-  created_at: string;
-  content_type: string;
-  content_id: string;
-  reporter: { username: string }[];
-  reported_user: { username: string }[];
-  content_preview?: string;
+  id: any;
+  reason: any;
+  description: any;
+  status: any;
+  created_at: any;
+  content_type: any;
+  content_id: any;
+  reporter: any;
+  reported_user: any;
+  content_preview?: any;
 }
 
 export default function ModerationPage() {
@@ -72,7 +72,7 @@ export default function ModerationPage() {
       }
 
       const { data } = await query;
-      setReports(data as any || []);
+      setReports(data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
     }
