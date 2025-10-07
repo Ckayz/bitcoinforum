@@ -11,6 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, Flag, Ban, Eye, Trash2, Lock, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
+type ReportUser = { username: string };
+
 interface Report {
   id: string;
   reason: string;
@@ -19,10 +21,11 @@ interface Report {
   created_at: string;
   content_type: string;
   content_id: string;
-  reporter: { username: string };
-  reported_user: { username: string };
+  reporter: ReportUser | null;        // allow null
+  reported_user: ReportUser | null;   // allow null
   content_preview?: string;
 }
+
 
 export default function ModerationPage() {
   const { user } = useAuth();
