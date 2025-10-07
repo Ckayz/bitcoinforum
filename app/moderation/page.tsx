@@ -12,16 +12,16 @@ import { Shield, Flag, Ban, Eye, Trash2, Lock, AlertTriangle } from 'lucide-reac
 import { formatDistanceToNow } from 'date-fns';
 
 interface Report {
-  id: any;
-  reason: any;
-  description: any;
-  status: any;
-  created_at: any;
-  content_type: any;
-  content_id: any;
-  reporter: any;
-  reported_user: any;
-  content_preview?: any;
+  id: string;
+  reason: string;
+  description: string;
+  status: string;
+  created_at: string;
+  content_type: string;
+  content_id: string;
+  reporter: { username: string };
+  reported_user: { username: string };
+  content_preview?: string;
 }
 
 export default function ModerationPage() {
@@ -72,8 +72,12 @@ export default function ModerationPage() {
       }
 
       const { data } = await query;
-      // @ts-ignore
-      setReports(data || []);
+      const transformedData = data?.map(report => ({
+        ...report,
+        reporter: report.reporter?.[0] || { username: 'Unknown' },
+        reported_user: report.reported_user?.[0] || { username: 'Unknown' }
+      })) || [];
+      setReports(transformedData);
     } catch (error) {
       console.error('Error fetching reports:', error);
     }
@@ -329,11 +333,11 @@ export default function ModerationPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
                           <p className="text-sm text-gray-400">Reporter</p>
-                          <p className="text-white">{report.reporter?.[0]?.username || 'Unknown'}</p>
+                          <p className="text-white">{report.reporter?.username || 'Unknown'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-400">Reported User</p>
-                          <p className="text-white">{report.reported_user?.[0]?.username || 'Unknown'}</p>
+                          <p className="text-white">{report.reported_user?.username || 'Unknown'}</p>
                         </div>
                       </div>
 
