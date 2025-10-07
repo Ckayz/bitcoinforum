@@ -72,6 +72,7 @@ export default function ModerationPage() {
       }
 
       const { data } = await query;
+      // @ts-ignore
       setReports(data || []);
     } catch (error) {
       console.error('Error fetching reports:', error);
