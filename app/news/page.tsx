@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
+import { normalizeThread } from '@/lib/supabase-utils';
 import { useAuth } from '@/hooks/useAuth';
 import { Navbar } from '@/components/Navbar';
 import { Button } from '@/components/ui/button';
@@ -82,7 +83,10 @@ export default function NewsPage() {
         .eq('category_id', categoryId)
         .order('created_at', { ascending: false });
 
-      setThreads(threadsData || []);
+      // Normalize the data to convert arrays to single objects
+      const normalizedThreads = (threadsData || []).map(normalizeThread);
+
+      setThreads(normalizedThreads);
     } catch (error) {
       console.error('Error fetching news:', error);
     } finally {

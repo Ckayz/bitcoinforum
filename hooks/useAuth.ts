@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
+
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
@@ -53,11 +55,16 @@ export function useAuth() {
         // For development, we'll create the profile immediately
         // In production, you might want to wait for email confirmation
         await createUserProfile(data.user.id, email, username);
+        toast.success('Account created successfully!', {
+          description: 'Welcome to Bitcoin Forum'
+        });
       }
 
       return data;
     } catch (error) {
       console.error('Signup error:', error);
+      const errorMessage = (error as Error)?.message || 'Failed to create account';
+      toast.error('Signup failed', { description: errorMessage });
       throw error;
     }
   };
@@ -70,15 +77,20 @@ export function useAuth() {
       });
 
       if (error) throw error;
-      
+
       // Ensure user profile exists
       if (data.user) {
         await ensureUserProfile(data.user);
+        toast.success('Welcome back!', {
+          description: 'Successfully signed in'
+        });
       }
-      
+
       return data;
     } catch (error) {
       console.error('Signin error:', error);
+      const errorMessage = (error as Error)?.message || 'Failed to sign in';
+      toast.error('Sign in failed', { description: errorMessage });
       throw error;
     }
   };
@@ -87,8 +99,10 @@ export function useAuth() {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+      toast.info('Signed out successfully');
     } catch (error) {
       console.error('Signout error:', error);
+      toast.error('Failed to sign out');
       throw error;
     }
   };

@@ -10,14 +10,13 @@ import { formatDistanceToNow } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { processMentions } from '@/lib/mentions';
 import { useRealtime } from '@/hooks/useRealtime';
+import { normalizeThread, getUsername, getUserRole } from '@/lib/supabase-utils';
 import { Navbar } from '@/components/Navbar';
-import { UserBadge } from '@/components/UserBadge';
 import { ShareModal } from '@/components/modals/ShareModal';
-import { Markdown } from '@/components/Markdown';
-import { ValidatedMarkdown } from '@/components/ValidatedMarkdown';
-import { MarkdownEditor } from '@/components/MarkdownEditor';
-import { MentionInput } from '@/components/MentionInput';
-import { ReactionButton } from '@/components/ReactionButton';
+import { ThreadCard } from '@/components/ThreadCard';
+import { CategoryTabs } from '@/components/CategoryTabs';
+import { BackToTop } from '@/components/BackToTop';
+import { EmptyState } from '@/components/EmptyState';
 import { useAuth } from '@/hooks/useAuth';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 
@@ -72,24 +71,6 @@ export default function Home() {
   const [commenting, setCommenting] = useState<{[key: string]: boolean}>({});
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMoreThreads, setHasMoreThreads] = useState(true);
-
-  // Helper function to safely get username
-  const getUsername = (users: any) => {
-    if (!users) return 'Unknown';
-    if (Array.isArray(users)) {
-      return users[0]?.username || 'Unknown';
-    }
-    return users.username || 'Unknown';
-  };
-
-  // Helper function to safely get user role
-  const getUserRole = (users: any) => {
-    if (!users) return undefined;
-    if (Array.isArray(users)) {
-      return users[0]?.role;
-    }
-    return users.role;
-  };
   const [shareModal, setShareModal] = useState<{isOpen: boolean; url: string; title: string}>({
     isOpen: false,
     url: '',
@@ -252,11 +233,14 @@ export default function Home() {
       }
       
       console.log('Fetched threads with users:', data?.[0]); // Debug log
-      
+
+      // Normalize the data to convert arrays to single objects
+      const normalizedData = (data || []).map(normalizeThread);
+
       if (page === 0) {
-        setThreads(data || []);
+        setThreads(normalizedData);
       } else {
-        setThreads(prev => [...prev, ...(data || [])]);
+        setThreads(prev => [...prev, ...normalizedData]);
       }
       
       return (data?.length || 0) === limit; // Return true if more data might be available
@@ -385,31 +369,11 @@ export default function Home() {
         </div>
 
         {/* Category Tabs */}
-        <div className="flex flex-wrap gap-2 mb-8 border-b border-zinc-800">
-          <button
-            onClick={() => setActiveTab('all')}
-            className={`px-4 py-2 rounded-t-lg transition-colors ${
-              activeTab === 'all'
-                ? 'bg-orange-500 text-white border-b-2 border-orange-500'
-                : 'text-gray-300 hover:text-white hover:bg-zinc-800'
-            }`}
-          >
-            All Posts
-          </button>
-          {categories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setActiveTab(category.id)}
-              className={`px-4 py-2 rounded-t-lg transition-colors ${
-                activeTab === category.id
-                  ? 'bg-orange-500 text-white border-b-2 border-orange-500'
-                  : 'text-gray-300 hover:text-white hover:bg-zinc-800'
-              }`}
-            >
-              {category.name}
-            </button>
-          ))}
-        </div>
+        <CategoryTabs
+          categories={categories}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
 
         {/* Posts Feed Header with New Thread and Refresh */}
         <div className="flex items-center justify-between mb-6">
@@ -438,169 +402,29 @@ export default function Home() {
         {/* Posts Feed */}
         <div className="space-y-6">
           {threads.length === 0 ? (
-            <Card className="bg-zinc-900 border-zinc-800">
-              <CardContent className="p-8 text-center">
-                <MessageSquare className="h-12 w-12 text-gray-600 mx-auto mb-4" />
-                <h3 className="text-lg font-semibold text-white mb-2">No posts yet</h3>
-                <p className="text-gray-300">Be the first to start a conversation!</p>
-              </CardContent>
-            </Card>
+            <EmptyState
+              icon={MessageSquare}
+              title="No posts yet"
+              description="Be the first to start a conversation!"
+              action={user ? {
+                label: 'Create Thread',
+                onClick: () => window.location.href = '/new-thread'
+              } : undefined}
+            />
           ) : (
             threads.map((thread) => (
-              <Card key={thread.id} className="bg-zinc-900 border-zinc-800">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <Link href={`/thread/${thread.id}`}>
-                        <CardTitle className="text-white hover:text-orange-500 transition-colors cursor-pointer mb-2">
-                          {thread.title}
-                        </CardTitle>
-                      </Link>
-                      <div className="flex items-center space-x-4 text-sm text-gray-400">
-                        <Link href={`/user/${getUsername(thread.users)}`}>
-                          <UserBadge 
-                            username={getUsername(thread.users)} 
-                            role={getUserRole(thread.users)}
-                            className="text-sm hover:text-orange-400"
-                          />
-                        </Link>
-                        <div className="flex items-center space-x-1">
-                          <MessageSquare className="h-4 w-4" />
-                          <span>{thread.posts?.length || 0} replies</span>
-                        </div>
-                        <div className="flex items-center space-x-1">
-                          <Clock className="h-4 w-4" />
-                          <span>{formatDistanceToNow(new Date(thread.created_at), { addSuffix: true })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-                
-                <CardContent>
-                  {/* Show first post (original post) */}
-                  {thread.posts && thread.posts.length > 0 && (
-                    <div className="mb-4">
-                      <div className="bg-zinc-800 rounded-lg p-4">
-                        {/* Post Author */}
-                        <div className="flex items-center space-x-2 mb-3">
-                          <UserBadge 
-                            username={getUsername(thread.posts[0].users)} 
-                            role={getUserRole(thread.posts[0].users)}
-                            isAnonymous={thread.posts[0].is_anonymous}
-                            className="text-sm"
-                          />
-                          <span className="text-gray-500 text-xs">
-                            {formatDistanceToNow(new Date(thread.posts[0].created_at), { addSuffix: true })}
-                          </span>
-                        </div>
-                        
-                        <div className="text-gray-300 mb-3 line-clamp-3">
-                          <ValidatedMarkdown content={thread.posts[0].content} />
-                        </div>
-                        
-                        {/* Media Display */}
-                        {thread.posts[0].image_url && (
-                          <div className="mb-3">
-                            <img src={thread.posts[0].image_url} alt="Post image" className="max-w-full h-48 object-cover rounded" />
-                          </div>
-                        )}
-                        
-                        {thread.posts[0].video_url && (
-                          <div className="mb-3">
-                            <video controls className="max-w-full h-48 rounded">
-                              <source src={thread.posts[0].video_url} type="video/mp4" />
-                            </video>
-                          </div>
-                        )}
-                        
-                        {/* Interaction buttons */}
-                        <div className="flex items-center justify-between mb-4">
-                          <div className="flex items-center space-x-4">
-                            <ReactionButton postId={thread.posts[0].id} />
-                            <button
-                              onClick={() => toggleComments(thread.posts[0].id)}
-                              className="flex items-center space-x-1 text-gray-400 hover:text-blue-500 transition-colors"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                              <span>{thread.posts[0].comments?.length || 0}</span>
-                              {expandedComments.has(thread.posts[0].id) ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </button>
-                            <button className="flex items-center space-x-1 text-gray-400 hover:text-green-500 transition-colors"
-                              onClick={() => handleShare(thread.id, thread.title)}>
-                              <Share2 className="h-4 w-4" />
-                              <span>Share</span>
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Comments Section */}
-                        {expandedComments.has(thread.posts[0].id) && (
-                          <div className="border-t border-zinc-700 pt-4">
-                            {/* Show top 3 comments */}
-                            {thread.posts[0].comments && thread.posts[0].comments.length > 0 && (
-                              <div className="space-y-3 mb-4">
-                                {thread.posts[0].comments.slice(0, 3).map((comment) => (
-                                  <div key={comment.id} className="bg-zinc-700 rounded p-3">
-                                    <div className="flex items-center space-x-2 mb-2">
-                                      <UserBadge 
-                                        username={getUsername(comment.users)} 
-                                        role={getUserRole(comment.users)}
-                                        isAnonymous={comment.is_anonymous}
-                                        className="text-xs"
-                                      />
-                                      <span className="text-xs text-gray-400">
-                                        {formatDistanceToNow(new Date(comment.created_at), { addSuffix: true })}
-                                      </span>
-                                    </div>
-                                    <div className="text-gray-300 text-sm">
-                                      <ValidatedMarkdown content={comment.content} />
-                                    </div>
-                                    {comment.image_url && (
-                                      <img src={comment.image_url} alt="Comment image" className="max-w-xs h-auto rounded mt-2" />
-                                    )}
-                                  </div>
-                                ))}
-                                {thread.posts[0].comments.length > 3 && (
-                                  <p className="text-sm text-gray-400 text-center">
-                                    +{thread.posts[0].comments.length - 3} more comments
-                                  </p>
-                                )}
-                              </div>
-                            )}
-
-                            {/* Add comment */}
-                            {user && (
-                              <div className="space-y-2">
-                                <MentionInput
-                                  value={newComment[thread.posts[0].id] || ''}
-                                  onChange={(value) => setNewComment(prev => ({ ...prev, [thread.posts[0].id]: value }))}
-                                  placeholder="Write a comment..."
-                                  className="bg-zinc-700 border-zinc-600 text-white text-sm rounded-md p-2 w-full resize-none"
-                                />
-                                <div className="flex justify-end">
-                                  <Button
-                                    onClick={() => handleComment(thread.posts[0].id)}
-                                    disabled={commenting[thread.posts[0].id] || !newComment[thread.posts[0].id]?.trim()}
-                                    size="sm"
-                                    className="bg-orange-500 hover:bg-orange-600"
-                                  >
-                                    {commenting[thread.posts[0].id] ? '...' : 'Post'}
-                                  </Button>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+              <ThreadCard
+                key={thread.id}
+                thread={thread}
+                user={user}
+                expandedComments={expandedComments}
+                newComment={newComment}
+                commenting={commenting}
+                onToggleComments={toggleComments}
+                onCommentChange={(postId, value) => setNewComment(prev => ({ ...prev, [postId]: value }))}
+                onComment={handleComment}
+                onShare={handleShare}
+              />
             ))
           )}
           
@@ -624,6 +448,7 @@ export default function Home() {
         url={shareModal.url}
         title={shareModal.title}
       />
+      <BackToTop />
     </div>
   );
 }

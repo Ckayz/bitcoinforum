@@ -11,6 +11,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { Navbar } from '@/components/Navbar';
 import { RichTextEditor } from '@/components/RichTextEditor';
+import { toast } from 'sonner';
 import Link from 'next/link';
 
 export default function NewThreadPage() {
@@ -73,10 +74,19 @@ export default function NewThreadPage() {
 
       if (postError) throw postError;
 
+      // Show success toast
+      toast.success('Thread created successfully!', {
+        description: 'Redirecting to your new thread...'
+      });
+
       // Redirect to the new thread
-      router.push(`/thread/${threadData.id}`);
+      setTimeout(() => router.push(`/thread/${threadData.id}`), 500);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to create thread');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to create thread';
+      setError(errorMessage);
+      toast.error('Failed to create thread', {
+        description: errorMessage
+      });
     } finally {
       setPosting(false);
     }

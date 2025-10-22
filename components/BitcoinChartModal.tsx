@@ -11,26 +11,24 @@ interface BitcoinChartModalProps {
   changePercent: number;
 }
 
-export function BitcoinChartModal({ 
-  isOpen, 
-  onClose, 
-  priceHistory, 
-  currentPrice, 
-  changePercent 
+export function BitcoinChartModal({
+  isOpen,
+  onClose,
+  priceHistory,
+  currentPrice,
+  changePercent
 }: BitcoinChartModalProps) {
-  if (!isOpen) return null;
-
   const handleBackdropClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {
       onClose();
     }
   };
 
-  const handleKeyDown = (e: KeyboardEvent) => {
+  const handleKeyDown = React.useCallback((e: KeyboardEvent) => {
     if (e.key === 'Escape') {
       onClose();
     }
-  };
+  }, [onClose]);
 
   // Add escape key listener
   React.useEffect(() => {
@@ -42,7 +40,9 @@ export function BitcoinChartModal({
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = 'unset';
     };
-  }, [isOpen]);
+  }, [isOpen, handleKeyDown]);
+
+  if (!isOpen) return null;
 
   return (
     <div 

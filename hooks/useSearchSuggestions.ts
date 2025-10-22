@@ -8,6 +8,7 @@ interface SearchSuggestion {
   username: string;
   avatar_url?: string;
   thread_id?: string;
+  excerpt?: string;
 }
 
 export function useSearchSuggestions(query: string, delay: number = 300) {

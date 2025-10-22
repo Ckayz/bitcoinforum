@@ -3,11 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { normalizeSingle } from '@/lib/supabase-utils';
 import { Navbar } from '@/components/Navbar';
+import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { EmptyState } from '@/components/EmptyState';
 import { Shield, Flag, Ban, Eye, Trash2, Lock, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -33,6 +37,18 @@ export default function ModerationPage() {
   const [loading, setLoading] = useState(true);
   const [isModerator, setIsModerator] = useState(false);
   const [activeTab, setActiveTab] = useState('pending');
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+    variant?: 'danger' | 'warning';
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    onConfirm: () => {},
+  });
 
   useEffect(() => {
     checkModeratorStatus();
@@ -81,64 +97,100 @@ export default function ModerationPage() {
       }
   
       const { data } = await query;
-  
-      // 🔧 normalize: Supabase returns arrays for these joins
+
+      // Normalize: Supabase returns joins as arrays
       const transformedData: Report[] = (data || []).map((r: any) => ({
         ...r,
-        reporter: r.reporter?.[0] || { username: 'Unknown' },
-        reported_user: r.reported_user?.[0] || { username: 'Unknown' },
+        reporter: normalizeSingle(r.reporter) || { username: 'Unknown' },
+        reported_user: normalizeSingle(r.reported_user) || { username: 'Unknown' },
       }));
-  
+
       setReports(transformedData);
     } catch (error) {
       console.error('Error fetching reports:', error);
+      toast.error('Failed to load reports', {
+        description: 'Please try refreshing the page'
+      });
     }
   };
   
 
   const handleReportAction = async (reportId: string, action: 'dismiss' | 'resolve') => {
-    try {
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          status: action === 'dismiss' ? 'dismissed' : 'resolved',
-          reviewed_at: new Date().toISOString(),
-          reviewed_by: user?.id
-        })
-        .eq('id', reportId);
+    const actionText = action === 'dismiss' ? 'dismiss' : 'resolve';
 
-      if (!error) {
-        fetchReports();
+    setConfirmDialog({
+      isOpen: true,
+      title: `${actionText.charAt(0).toUpperCase() + actionText.slice(1)} Report`,
+      description: `Are you sure you want to ${actionText} this report? This action cannot be undone.`,
+      variant: action === 'dismiss' ? 'warning' : 'danger',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from('reports')
+            .update({
+              status: action === 'dismiss' ? 'dismissed' : 'resolved',
+              reviewed_at: new Date().toISOString(),
+              reviewed_by: user?.id
+            })
+            .eq('id', reportId);
+
+          if (!error) {
+            toast.success(`Report ${action === 'dismiss' ? 'dismissed' : 'resolved'}`, {
+              description: 'The report status has been updated'
+            });
+            fetchReports();
+          } else {
+            toast.error('Failed to update report', {
+              description: 'Please try again'
+            });
+          }
+        } catch (error) {
+          console.error('Error updating report:', error);
+          toast.error('Failed to update report');
+        }
       }
-    } catch (error) {
-      console.error('Error updating report:', error);
-    }
+    });
   };
 
-  const deleteContent = async (contentType: string, contentId: string) => {
-    try {
-      const { error } = await supabase
-        .from(contentType === 'thread' ? 'threads' : contentType === 'post' ? 'posts' : 'comments')
-        .update({
-          is_deleted: true,
-          deleted_by: user?.id,
-          deleted_at: new Date().toISOString()
-        })
-        .eq('id', contentId);
+  const deleteContent = (contentType: string, contentId: string) => {
+    setConfirmDialog({
+      isOpen: true,
+      title: 'Delete Content',
+      description: `Are you sure you want to permanently delete this ${contentType}? This action cannot be undone and will remove the content from the forum.`,
+      variant: 'danger',
+      onConfirm: async () => {
+        try {
+          const { error } = await supabase
+            .from(contentType === 'thread' ? 'threads' : contentType === 'post' ? 'posts' : 'comments')
+            .update({
+              is_deleted: true,
+              deleted_by: user?.id,
+              deleted_at: new Date().toISOString()
+            })
+            .eq('id', contentId);
 
-      if (!error) {
-        // Log moderation action
-        await supabase.from('moderation_actions').insert([{
-          moderator_id: user?.id,
-          action_type: `delete_${contentType}`,
-          target_type: contentType,
-          target_id: contentId,
-          reason: 'Content moderation'
-        }]);
+          if (!error) {
+            // Log moderation action
+            await supabase.from('moderation_actions').insert([{
+              moderator_id: user?.id,
+              action_type: `delete_${contentType}`,
+              target_type: contentType,
+              target_id: contentId,
+              reason: 'Content moderation'
+            }]);
+            toast.success('Content deleted', {
+              description: 'The content has been removed from the forum'
+            });
+            fetchReports();
+          } else {
+            toast.error('Failed to delete content');
+          }
+        } catch (error) {
+          console.error('Error deleting content:', error);
+          toast.error('Failed to delete content');
+        }
       }
-    } catch (error) {
-      console.error('Error deleting content:', error);
-    }
+    });
   };
 
   if (loading) {
@@ -285,12 +337,11 @@ export default function ModerationPage() {
           <TabsContent value={activeTab} className="mt-6">
             <div className="space-y-4">
               {reports.length === 0 ? (
-                <Card className="bg-zinc-900 border-zinc-800">
-                  <CardContent className="p-8 text-center">
-                    <Flag className="h-12 w-12 mx-auto mb-4 text-gray-500" />
-                    <p className="text-gray-400">No reports found</p>
-                  </CardContent>
-                </Card>
+                <EmptyState
+                  icon={Flag}
+                  title="No reports found"
+                  description={`There are no ${activeTab === 'all' ? '' : activeTab + ' '}reports at the moment.`}
+                />
               ) : (
                 reports.map((report) => (
                   <Card key={report.id} className="bg-zinc-900 border-zinc-800">
@@ -375,6 +426,16 @@ export default function ModerationPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmDialog.onConfirm}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        variant={confirmDialog.variant}
+        confirmText="Confirm"
+      />
     </div>
   );
 }

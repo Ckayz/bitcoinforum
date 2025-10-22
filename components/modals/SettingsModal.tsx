@@ -9,6 +9,7 @@ import { Switch } from '../ui/switch';
 import { User, Bell, Shield, Moon, Sun, Camera, Upload } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
+import { toast } from 'sonner';
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -85,11 +86,15 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         .eq('id', user?.id);
 
       if (updateError) throw updateError;
-      
-      alert('Profile picture updated successfully!');
+
+      toast.success('Profile picture updated!', {
+        description: 'Your new profile picture is now visible'
+      });
     } catch (error) {
       console.error('Error uploading profile picture:', error);
-      alert('Error uploading profile picture: ' + (error as Error)?.message || 'Unknown error');
+      toast.error('Failed to upload profile picture', {
+        description: (error as Error)?.message || 'Unknown error'
+      });
     } finally {
       setUploading(false);
     }
@@ -116,13 +121,17 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         .eq('id', user.id);
 
       if (error) throw error;
-      
-      alert('Profile updated successfully!');
+
+      toast.success('Profile updated!', {
+        description: 'Your profile changes have been saved'
+      });
       // Trigger a page refresh to update all components
-      window.location.reload();
+      setTimeout(() => window.location.reload(), 500);
     } catch (error) {
       console.error('Error saving profile:', error);
-      alert('Error saving profile: ' + (error as Error)?.message || 'Unknown error');
+      toast.error('Failed to save profile', {
+        description: (error as Error)?.message || 'Unknown error'
+      });
     } finally {
       setSaving(false);
     }

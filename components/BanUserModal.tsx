@@ -25,9 +25,7 @@ export function BanUserModal({ userId, username, trigger }: BanUserModalProps) {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const handleBanUser = async () => {
-    if (!user || !reason.trim()) return;
-
+  const executeBan = async () => {
     setSubmitting(true);
     try {
       const banData: any = {
@@ -71,6 +69,16 @@ export function BanUserModal({ userId, username, trigger }: BanUserModalProps) {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleBanUser = () => {
+    if (!user || !reason.trim()) return;
+
+    if (!confirm(`Are you sure you want to ${banType === 'permanent' ? 'permanently' : 'temporarily'} ban ${username}? This is a serious moderation action.`)) {
+      return;
+    }
+
+    executeBan();
   };
 
   return (

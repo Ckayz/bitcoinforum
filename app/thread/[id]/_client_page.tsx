@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Bitcoin, MessageSquare, Clock, User, ArrowLeft, Heart, Image, Video, Share2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { normalizeThread, normalizePost, getUsername } from '@/lib/supabase-utils';
 import { useAuth } from '@/hooks/useAuth';
 import { useInfiniteScroll } from '@/hooks/useInfiniteScroll';
 import { useRealtime } from '@/hooks/useRealtime';
@@ -178,7 +179,7 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
           .single();
 
         if (threadError) throw threadError;
-        setThread(threadData);
+        setThread(normalizeThread(threadData));
       }
 
       const { data: postsData, error: postsError } = await supabase
@@ -200,11 +201,14 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
       
       // Debug log to see data structure
       console.log('Posts data:', postsData?.[0]);
-      
+
+      // Normalize the data to convert arrays to single objects
+      const normalizedPosts = (postsData || []).map(normalizePost);
+
       if (page === 0) {
-        setPosts(postsData || []);
+        setPosts(normalizedPosts);
       } else {
-        setPosts(prev => [...prev, ...(postsData || [])]);
+        setPosts(prev => [...prev, ...normalizedPosts]);
       }
       
       return (postsData?.length || 0) === limit;
@@ -272,12 +276,6 @@ export function ClientThreadPage({ threadId }: ClientThreadPageProps) {
     }
   };
 
-  const getUsername = (users: any) => {
-    if (Array.isArray(users)) {
-      return users[0]?.username || 'Unknown User';
-    }
-    return users?.username || 'Unknown User';
-  };
 
   const handlePostUpdate = (postId: string, newContent: string, editedAt: string) => {
     setPosts(prevPosts => 

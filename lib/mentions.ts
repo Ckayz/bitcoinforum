@@ -33,7 +33,9 @@ export async function getUserIdsByUsernames(usernames: string[]): Promise<{ [use
   
   const userMap: { [username: string]: string } = {};
   data?.forEach(user => {
-    userMap[user.username] = user.id;
+    if (user.username && user.id) {
+      userMap[user.username] = user.id;
+    }
   });
   
   return userMap;
