@@ -26,6 +26,8 @@ export function BanUserModal({ userId, username, trigger }: BanUserModalProps) {
   const [success, setSuccess] = useState(false);
 
   const executeBan = async () => {
+    if (!user) return;
+
     setSubmitting(true);
     try {
       const banData: any = {
